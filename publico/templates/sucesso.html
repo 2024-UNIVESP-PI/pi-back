@@ -1,0 +1,20 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Envie sua sugestão</title>
+</head>
+<body>
+    {% include 'layouts/base.html' %}
+    {% block content %}
+    <div class="containertabela">
+    <h2>Obrigado por enviar sua sugestão!</h2>
+    <p><a href="{% url 'criar_sugestao' %}">Enviar outra sugestão</a></p>
+    {% endblock %}
+    </div>
+    {% include 'layouts/rodape.html' %} 
+</body>
+</html>

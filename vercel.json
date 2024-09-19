@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "projetoIntegrador1/wsgi.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "build_files.sh",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "staticfiles_build"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "projetoIntegrador1/wsgi.py"
+    }
+  ],
+  "env": {
+    "DJANGO_SETTINGS_MODULE": "projetoIntegrador1.settings",
+    "SECRET_KEY": "django-insecure-jsoka*xk5w4x@u#b2^t5yrm=ve0x4!$9#6n&gwy&sxi7zcru60",
+    "DEBUG": "true",
+    "DATABASE_URL": "postgres://postgres:kRwRaNulpEZEjCHQDOjWAnPEyOCYUKKS@roundhouse.proxy.rlwy.net:13272/railway"
+  }
+}

@@ -1,0 +1,226 @@
+/* Estilos gerais */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #ffefd5; /* Amarelo claro */
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+/* Estilos para parágrafos, listas e tabelas */
+p {
+    font-size: 16px;
+    line-height: 1.6;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+ul, ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+li {
+    margin-bottom: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+th {
+    background-color: #ffefd5; /* Amarelo claro */
+    padding: 8px;
+    text-align: left;
+}
+
+td {
+    padding: 8px;
+}
+
+/* Estilos para containers e cards */
+.containertabela, .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    height: 100vh;
+    padding: 20px;
+}
+
+.card-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+.card {
+    background-color: #f5f5f5; /* Cinza claro */
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 20px;
+    margin: 10px;
+    width: 300px;
+    text-align: center;
+}
+
+.card h2 {
+    font-size: 1.5rem;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.card p {
+    font-size: 1rem;
+    color: #777;
+    margin-bottom: 20px;
+}
+
+.card a {
+    display: block;
+    background-color: #ff7f50; /* Laranja */
+    color: #ffffff;
+    text-decoration: none;
+    padding: 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Estilos para botões */
+button {
+    padding: 7px 14px;
+    border: none;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    width: 75px;
+}
+
+button:hover {
+    background-color: #ff7f50; /* Laranja */
+}
+
+button.logo {
+    font-size: 20px;
+    font-weight: bold;
+    color: #a00404; /* Laranja */
+    background-color: transparent;
+}
+
+button.profile-btn {
+    padding: 8px 16px;
+    background-color: #f4f4f4; /* Verde */
+    color: #fff;
+}
+
+/* Estilos para a barra de navegação */
+@media screen and (max-width: 768px) {
+    .menu, .profile-btn {
+        display: none;
+    }
+
+    .navbar {
+        justify-content: center;
+    }
+}
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.7);
+    padding: 10px 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    background-image: url('static/publico/R.png');
+    background-size: cover;
+    background-position: center bottom;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: bold;
+    color: #ff0000fb;
+}
+
+.menu {
+    display: flex;
+}
+
+.menu-item {
+    margin-right: 20px; /* Espaçamento entre os itens do menu */
+    position: relative;
+}
+
+.menu-item a {
+    text-decoration: none;
+    color: #747574;
+    font-weight: 500;
+}
+
+.menu-item:hover::after {
+    content: "\25BC";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+}
+
+.profile-btn {
+    background-color: #32cd32; /* Verde */
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* Estilos para o rodapé */
+.footer {
+    background-color: #000000; /* Coral */
+    color: white;
+    padding: 20px;
+    text-align: center;
+}
+
+.footer p {
+    margin-bottom: 10px;
+}
+
+.footer ul {
+    list-style: none;
+    padding: 0;
+}
+
+.footer ul li {
+    display: inline;
+    margin-right: 10px;
+}
+
+.footer ul li a {
+    color: white;
+    text-decoration: none;
+}
+
+.footer ul li a:hover {
+    text-decoration: underline;
+}
+
+.footer .copyright, .footer .footer-links .footer-link {
+    color: white;
+}

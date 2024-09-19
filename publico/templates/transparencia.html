@@ -1,0 +1,61 @@
+{% load static %}
+
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meus Cards</title>
+    <link rel="stylesheet" href="{% static 'publico/css.css' %}">
+</head>
+<body>
+    <div class="content">
+        {% include 'layouts/base.html' %}
+
+        {% block content %}
+        <div class="containertabela">
+            <h1>LISTA DE PRODUTOS</h1>
+            <div class="divisoria-estilizada"></div>
+            <hr>
+            <table>
+            <tr class="linha-divisoria">
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Preço</th>
+                        <th>Saldo Inicial</th>
+                        <th>Vendas</th>
+                        <th>Saldo</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for produto in produtos_list %}
+                    <tr>
+                        <td>{{ produto.nome }}</td>
+                        <td>{{ produto.preco }}</td>
+                        <td>{{ produto.quantidade_inicial }}</td>
+                        <td>{{ produto.vendas }}</td>
+                        <td>{{ produto.saldo }}</td>
+                        <td>{{ produto.arrecadacao }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="linha-divisoria">
+                    <tr>
+                        <td>TOTAL</td>
+                        <td></td>
+                        <td>{{ total_saldo_inicial }}</td>
+                        <td>{{ total_vendas }}</td>
+                        <td>{{ total_saldo }}</td>
+                        <td>{{ total_arrecadacao }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% endblock %}
+        
+        {% include 'layouts/rodape.html' %}
+    </div>
+</body>
+</html>
