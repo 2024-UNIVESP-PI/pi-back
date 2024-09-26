@@ -1,10 +1,15 @@
-from django.http import HttpResponse
+from rest_framework import viewsets
+from .models import Ficha, Produto, MovimentacaoEstoque
+from .serializers import FichaSerializer, ProdutoSerializer, MovimentacaoEstoqueSerializer
 
-from django.shortcuts import render
-
-# Create your views here.
-
-def movimentacao(request):
-    print('produtos')
-    return render(request, 'movimentacao.html')
+class FichaViewSet(viewsets.ModelViewSet):
+    queryset = Ficha.objects.all()
+    serializer_class = FichaSerializer
     
+class ProdutoViewSet(viewsets.ModelViewSet):
+    queryset = Produto.objects.all()
+    serializer_class = ProdutoSerializer
+    
+class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
+    queryset = MovimentacaoEstoque.objects.all()
+    serializer_class = MovimentacaoEstoqueSerializer
