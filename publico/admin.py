@@ -1,7 +1,9 @@
 from django.contrib import admin
 from publico import models
 # Register your models here.
+
 @admin.register(models.Sugestao)
+
 class SugestaoAdmin(admin.ModelAdmin):
     list_display = ('nome', 'telefone', 'situacao', 'sugestao', 'data_sugestao')
     list_filter = ('situacao', 'data_sugestao')

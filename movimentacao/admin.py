@@ -1,32 +1,57 @@
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from .models import Produto, Venda, Caixa
-
-class ProdutoAdmin(admin.ModelAdmin):
-    list_display = ('id' , 'nome', 'unidade', 'quantidade_inicial' , 'preco', 'vendas', 'saldo', 'arrecadacao', 'data_criacao')
-
-admin.site.register(Produto, ProdutoAdmin)
+from .models import Caixa, Ficha, Produto, MovimentacaoEstoque
 
 class CaixaAdmin(admin.ModelAdmin):
-    list_display = ('id' , 'caixa')
+    list_display = ('id', 'nome')
+    # list_filter = ()
+    search_fields = ('nome',)
 
 admin.site.register(Caixa, CaixaAdmin)
 
-class VendaAdmin(admin.ModelAdmin):
-    list_display = ('id','produto', 'quantidade', 'caixa' , 'data')
-    list_filter = ('caixa', 'produto')
+class FichaAdmin(admin.ModelAdmin):
+    list_display = ('numero', 'saldo')
+    # list_filter = ()
+    search_fields = ('numero',)
 
-    def save_model(self, request, obj, form, change):
-        try:
-            produto = Produto.objects.get(id=obj.produto.id)
-            novo_saldo = produto.saldo - obj.quantidade
-            produto.saldo = novo_saldo
-            produto.save()
-            obj.saldo = novo_saldo
-            super().save_model(request, obj, form, change)
-            messages.success(request, f'Saldo de {obj.produto}: {novo_saldo}')
-        except ValidationError as e:
-            self.message_user(request, f"Erro: {e}", level='ERROR')
+admin.site.register(Ficha, FichaAdmin)
 
-admin.site.register(Venda, VendaAdmin)
+class ProdutoAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'estoque', 'unidade', 'preco')
+    list_filter = ('unidade',)
+    search_fields = ('nome',)
+
+admin.site.register(Produto, ProdutoAdmin)
+
+class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
+    list_display = ('produto', 'tipo', 'quantidade', 'caixa')
+    list_filter = ('tipo',)
+    search_fields = ('produto__nome',)
+    
+    # Sobrescreve a ação de deleção em massa
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            tipo = obj.tipo
+            quantidade = obj.quantidade
+            estoque = obj.produto.estoque
+            
+            if tipo == 'E':
+                if estoque < quantidade:
+                    self.message_user(
+                        request, 
+                        f"Estoque insuficiente para apagar movimentação de entrada {obj}.",
+                        level=messages.ERROR
+                    )
+                    continue # Pula a exclusão deste objeto e vai para o próximo
+            
+            try:
+                obj.delete()
+            except Exception as e:
+                self.message_user(
+                    request, 
+                    f"Erro ao excluir {obj}: {e}", 
+                    level=messages.ERROR
+                )
+
+admin.site.register(MovimentacaoEstoque, MovimentacaoEstoqueAdmin)
