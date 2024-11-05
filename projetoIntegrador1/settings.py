@@ -36,6 +36,10 @@ CORS_ALLOW_ALL_ORIGINS = True
 #     "*",
 # ]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://api-arraiatech.up.railway.app',
+]
+
 
 # Application definition
 
