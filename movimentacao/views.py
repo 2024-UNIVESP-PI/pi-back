@@ -18,7 +18,7 @@ class CaixaViewSet(viewsets.ModelViewSet):
     serializer_class = CaixaSerializer
 
 class FichaViewSet(viewsets.ModelViewSet):
-    queryset = Ficha.objects.all()
+    queryset = Ficha.objects.all().order_by('numero')
     # serializer_class = FichaSerializer
     
     def get_serializer_class(self):
