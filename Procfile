@@ -1,1 +1,1 @@
-web: gunicorn projetoIntegrador1.wsgi
+web: web: python manage.py collectstatic --noinput && gunicorn projetoIntegrador1.wsgi
