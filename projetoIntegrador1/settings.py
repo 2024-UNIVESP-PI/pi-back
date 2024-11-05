@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-jsoka*xk5w4x@u#b2^t5yrm=ve0x4!$9#6n&gwy&sxi7zcru60
 DEBUG = True
 
 # ALLOWED_HOSTS = ['.vercel.app','.now.sh','127.0.0.1','localhost']
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'api-arraiatech.up.railway.app']
 
 CORS_ALLOW_ALL_ORIGINS = True
 # CORS_ALLOWED_ORIGINS = [
