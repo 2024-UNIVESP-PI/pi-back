@@ -18,8 +18,8 @@ class FichaAdmin(admin.ModelAdmin):
 admin.site.register(Ficha, FichaAdmin)
 
 class ProdutoAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'estoque', 'unidade', 'preco')
-    list_filter = ('unidade',)
+    list_display = ('nome', 'estoque', 'medida', 'preco', 'caixa')
+    list_filter = ('medida',)
     search_fields = ('nome',)
 
 admin.site.register(Produto, ProdutoAdmin)
