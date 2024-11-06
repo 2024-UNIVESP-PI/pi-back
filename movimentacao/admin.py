@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from .models import Caixa, Ficha, Produto, MovimentacaoEstoque
+from .models import Caixa, Ficha, Produto, MovimentacaoEstoque, Venda
 
 class CaixaAdmin(admin.ModelAdmin):
     list_display = ('id', 'nome')
@@ -55,3 +55,5 @@ class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
                 )
 
 admin.site.register(MovimentacaoEstoque, MovimentacaoEstoqueAdmin)
+
+admin.site.register(Venda)
