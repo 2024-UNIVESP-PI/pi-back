@@ -19,7 +19,7 @@ class Ficha(models.Model):
     )
     
     def __str__(self):
-        return f"{self.numero} (${self.saldo})"
+        return f"{self.numero} (Saldo ${self.saldo})"
     
     def recarga(self, valor):
         valor = Decimal(valor)
@@ -53,7 +53,7 @@ class Produto(models.Model):
     data_criacao = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"{self.nome} ({self.estoque})"
+        return f"{self.nome} (Estoque {self.estoque})"
 
     def atualizar_estoque(self, novo_estoque):
         self.estoque = novo_estoque
@@ -157,13 +157,29 @@ class Venda(models.Model):
     ficha = models.ForeignKey(Ficha, on_delete=models.PROTECT, related_name='compras')
     
     @property
+    def caixa(self):
+        return self.movimentacao.caixa
+    
+    @property
+    def produto(self):
+        return self.movimentacao.produto.nome
+    
+    @property
+    def data(self):
+        return self.movimentacao.data
+    
+    @property
+    def quantidade(self):
+        return self.movimentacao.quantidade
+        
+    @property
     def preco_total(self):
         movimentacao = self.movimentacao
         produto = movimentacao.produto
         return produto.preco * movimentacao.quantidade
     
     def __str__(self):
-        return f"{self.movimentacao} - {self.ficha}"
+        return f"{self.movimentacao} - Ficha {self.ficha}"
     
     def clean(self):
         tipo_movimentacao = self.movimentacao.tipo

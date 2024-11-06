@@ -56,4 +56,11 @@ class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
 
 admin.site.register(MovimentacaoEstoque, MovimentacaoEstoqueAdmin)
 
-admin.site.register(Venda)
+class VendaAdmin(admin.ModelAdmin):
+    list_display = ('caixa', 'produto', 'quantidade', 'preco_total', 'numero_ficha', 'data')
+    list_filter = ('movimentacao__caixa',)
+
+    def numero_ficha(self, obj):
+        return obj.ficha.numero
+
+admin.site.register(Venda, VendaAdmin)
