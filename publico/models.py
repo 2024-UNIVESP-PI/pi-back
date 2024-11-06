@@ -22,6 +22,9 @@ class Sugestao(models.Model):
     def __str__(self):
         return self.nome
 
+    class Meta:
+        verbose_name_plural = "Sugestões"
+    
     def save(self, *args, **kwargs):
         self.nome = self.nome.upper()  # Convertendo o nome para maiúsculo
         super(Sugestao, self).save(*args, **kwargs)

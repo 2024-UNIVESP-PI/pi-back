@@ -75,6 +75,9 @@ class MovimentacaoEstoque(models.Model):
     def __str__(self):
         return f"{self.produto.nome} - {self.tipo} ({self.quantidade})"
     
+    class Meta:
+        verbose_name_plural = "Movimentações estoque"
+    
     def clean(self):
         tipo = self.tipo
         quantidade = self.quantidade
