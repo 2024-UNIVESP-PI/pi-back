@@ -32,18 +32,10 @@ class ProdutoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Produto
         fields = '__all__'
-        # extra_kwargs = {
-        #     'estoque': {'read_only': True},
-        # }
 
     def create(self, validated_data):
-        # Pega o valor de estoque inicial, se fornecido
         estoque = validated_data.pop('estoque', 0)
-        
-        # Cria o produto
         produto = Produto.objects.create(**validated_data)
-        
-        # Se houver um valor de estoque inicial, cria uma movimentação de entrada
         if estoque > 0:
             MovimentacaoEstoque.objects.create(
                 produto=produto,
@@ -52,6 +44,28 @@ class ProdutoSerializer(serializers.ModelSerializer):
                 caixa=produto.caixa
             )
         return produto
+
+    def update(self, instance, validated_data):
+        estoque_novo = validated_data.pop('estoque', None)
+
+        # Atualiza os demais campos
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # Se a quantidade de estoque foi informada, trata movimentação
+        if estoque_novo is not None and estoque_novo != instance.estoque:
+            diferenca = estoque_novo - instance.estoque
+            tipo_mov = 'E' if diferenca > 0 else 'S'
+            MovimentacaoEstoque.objects.create(
+                produto=instance,
+                quantidade=abs(diferenca),
+                tipo=tipo_mov,
+                caixa=instance.caixa
+            )
+            instance.estoque = estoque_novo
+
+        instance.save()
+        return instance
 
 class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
     class Meta:
