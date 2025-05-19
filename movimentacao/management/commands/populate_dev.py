@@ -57,8 +57,10 @@ class Command(BaseCommand):
                 nome=p["nome"],
                 categoria=p["categoria"],
                 medida=p["medida"],
-                preco=Decimal(p["preco"])
+                preco=Decimal(p["preco"]),
+                estoque=p["estoque"]
             )
+
 
         fichas = [
             {"numero": 1, "saldo": "50.00"},
