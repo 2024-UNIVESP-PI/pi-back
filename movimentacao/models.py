@@ -38,6 +38,19 @@ class Produto(models.Model):
         ('KG', 'Quilograma'),
     )
 
+    CATEGORIA_CHOICES = (
+        ('bebidas', 'Bebidas'),
+        ('doces', 'Doces'),
+        ('salgados', 'Salgados'),
+        ('jogos', 'Jogos'),
+    )
+    
+    categoria = models.CharField(
+        max_length=20,
+        choices=CATEGORIA_CHOICES,
+        default='doces',
+        help_text="Categoria do produto"
+    )
     caixa = models.ForeignKey(Caixa, on_delete=models.PROTECT, related_name='produtos')
     nome = models.CharField(max_length=100, unique=True)
     medida = models.CharField(max_length=3, choices=MEDIDA_CHOICES)
