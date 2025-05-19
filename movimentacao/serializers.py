@@ -27,6 +27,7 @@ class ProdutoSerializer(serializers.ModelSerializer):
         decimal_places=2,
         coerce_to_string=False
     )
+    categoria = serializers.CharField()
 
     class Meta:
         model = Produto
@@ -50,7 +51,6 @@ class ProdutoSerializer(serializers.ModelSerializer):
                 tipo='E',
                 caixa=produto.caixa
             )
-        
         return produto
 
 class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
