@@ -24,7 +24,6 @@ def dashboard_data(request):
         chave = f"{hora:02d}h-{(hora+1)%24:02d}h"
         vendas_por_horario[chave] += 1
 
-
     EMOJIS_CATEGORIA = {
         "doce": "🍬",
         "salgado": "🥨",
@@ -56,6 +55,17 @@ def dashboard_data(request):
         for p in top_produtos
     ]
 
+    vendas_list = []
+    for v in vendas:
+        vendas_list.append({
+            "id": v.id,
+            "horario": localtime(v.data).isoformat(),
+            "produto": v.movimentacao.produto.nome,
+            "categoria": v.movimentacao.produto.categoria,
+            "quantidade": v.movimentacao.quantidade,
+            "valorTotal": float(v.valor_total),
+        })
+        
     return Response({
         "totalVendas": total_vendas,
         "receita": receita,
@@ -63,4 +73,5 @@ def dashboard_data(request):
         "vendasPorHorario": vendas_por_horario,
         "vendasPorCategoria": categoria_formatada,
         "topProdutos": top_produtos_formatado,
+        "vendasDetalhadas": vendas_list,
     })
