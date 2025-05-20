@@ -26,7 +26,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-jsoka*xk5w4x@u#b2^t5yrm=ve0x4!$9#6n&gwy&sxi7zcru60'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 
 # ALLOWED_HOSTS = ['.vercel.app','.now.sh','127.0.0.1','localhost']
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'api-arraiatech.up.railway.app']
@@ -37,6 +38,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 # ]
 
 CSRF_TRUSTED_ORIGINS = [
+    'https://arraia-tech.up.railway.app',
     'https://api-arraiatech.up.railway.app',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
@@ -99,6 +101,7 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
 # DATABASES = {
 #     'default': dj_database_url.config(default=os.environ.get('DATABASE_URL'), conn_max_age=1800)
 # }
