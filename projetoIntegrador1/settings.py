@@ -95,16 +95,16 @@ WSGI_APPLICATION = 'projetoIntegrador1.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
 # DATABASES = {
-#     'default': dj_database_url.config(default=os.environ.get('DATABASE_URL'), conn_max_age=1800)
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
 # }
+
+DATABASES = {
+    'default': dj_database_url.config(default=os.environ.get('DATABASE_URL'), conn_max_age=1800)
+}
 
 
 
