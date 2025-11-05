@@ -1,1 +1,1 @@
-web: gunicorn projetoIntegrador1.wsgi --log-file -
+web: gunicorn projetoIntegrador1.wsgi:application --bind 0.0.0.0:$PORT --log-file -

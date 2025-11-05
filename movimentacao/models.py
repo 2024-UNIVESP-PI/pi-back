@@ -1,13 +1,22 @@
 from django.db import models
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
+from django.db.models import Sum
 from decimal import Decimal
 
 class Caixa(models.Model):
     nome = models.CharField(max_length=200)
+    usuario = models.CharField(max_length=100, unique=True, null=True, blank=True, help_text="Usuário para login do caixa")
+    senha = models.CharField(max_length=255, null=True, blank=True, help_text="Senha (armazenada em texto simples - NÃO recomendado para produção)")
+    
+    class Meta:
+        verbose_name_plural = "Caixas"
+        indexes = [
+            models.Index(fields=['usuario']),
+        ]
     
     def __str__(self):
-        return self.nome
+        return f"{self.nome} ({self.usuario})"
     
 class Ficha(models.Model):
     numero = models.PositiveSmallIntegerField(unique=True)
@@ -17,6 +26,9 @@ class Ficha(models.Model):
         default=0,
         validators=[MinValueValidator(Decimal('0.00'))]
     )
+    is_active = models.BooleanField(default=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by_caixa = models.ForeignKey('Caixa', on_delete=models.SET_NULL, null=True, blank=True, related_name='fichas_deletadas')
     
     def __str__(self):
         return f"{self.numero} (Saldo ${self.saldo})"
@@ -62,11 +74,25 @@ class Produto(models.Model):
     )
     
     estoque = models.PositiveSmallIntegerField(default=0, editable=False)
+    
+    # Campos para reserva antecipada
+    disponivel_reserva = models.BooleanField(default=False, help_text="Disponível para reserva antecipada")
+    limite_reserva = models.PositiveSmallIntegerField(default=2, help_text="Limite de itens por reserva (padrão: 2)")
+    quantidade_reserva_disponivel = models.PositiveSmallIntegerField(default=0, help_text="Quantidade disponível para reserva")
 
     data_criacao = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
         return f"{self.nome} (Estoque {self.estoque})"
+    
+    @property
+    def total_reservas_antecipadas(self):
+        """Retorna total de reservas antecipadas confirmadas ou pendentes"""
+        return self.reservas.filter(
+            status__in=['pendente', 'confirmada']
+        ).aggregate(
+            total=models.Sum('quantidade')
+        )['total'] or 0
 
     def atualizar_estoque(self, novo_estoque):
         self.estoque = novo_estoque
@@ -239,4 +265,99 @@ class Venda(models.Model):
         
         # Salva a movimentação
         super().save(*args, **kwargs)
-        
+
+
+class QRCodeReserva(models.Model):
+    """QR Code para reserva antecipada"""
+    codigo = models.CharField(max_length=255, unique=True, help_text="Código único do QR code")
+    descricao = models.CharField(max_length=200, blank=True, help_text="Descrição opcional")
+    data_expiracao = models.DateTimeField(null=True, blank=True, help_text="Data de expiração do QR code")
+    ativo = models.BooleanField(default=True)
+    produtos_disponiveis = models.ManyToManyField(Produto, related_name='qr_codes_reserva', blank=True)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-data_criacao']
+        verbose_name_plural = "QR Codes de Reserva"
+        indexes = [
+            models.Index(fields=['codigo', 'ativo']),
+        ]
+    
+    def __str__(self):
+        return f"QR Reserva: {self.codigo} - {'Ativo' if self.ativo else 'Inativo'}"
+
+
+class ReservaProduto(models.Model):
+    STATUS_CHOICES = (
+        ('pendente', 'Pendente'),
+        ('confirmada', 'Confirmada'),
+        ('cancelada', 'Cancelada'),
+        ('finalizada', 'Finalizada'),
+    )
+    
+    # Campos para reserva antecipada (sem ficha inicialmente)
+    ficha = models.ForeignKey(Ficha, on_delete=models.CASCADE, related_name='reservas', null=True, blank=True)
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='reservas')
+    quantidade = models.PositiveSmallIntegerField()
+    
+    # Informações do usuário (para reserva antecipada)
+    nome_completo = models.CharField(max_length=200)
+    cpf = models.CharField(max_length=11, unique=False, help_text="CPF do usuário (chave única para reserva)")
+    
+    # QR Code de origem (se aplicável)
+    qr_code_reserva = models.ForeignKey(QRCodeReserva, on_delete=models.SET_NULL, null=True, blank=True, related_name='reservas')
+    
+    data_reserva = models.DateTimeField(auto_now_add=True)
+    data_confirmacao = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendente')
+    observacoes = models.TextField(blank=True)
+    
+    class Meta:
+        ordering = ['-data_reserva']
+        verbose_name_plural = "Reservas de Produtos"
+        indexes = [
+            models.Index(fields=['ficha', 'status']),
+            models.Index(fields=['produto', 'status']),
+            models.Index(fields=['cpf', 'status']),
+            models.Index(fields=['qr_code_reserva', 'status']),
+        ]
+        # Evitar múltiplas reservas do mesmo CPF para mesmo produto
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cpf', 'produto', 'status'],
+                condition=models.Q(status__in=['pendente', 'confirmada']),
+                name='unique_reserva_ativa_por_cpf_produto'
+            )
+        ]
+    
+    def __str__(self):
+        if self.ficha:
+            return f"Reserva {self.id} - Ficha {self.ficha.numero} - {self.produto.nome}"
+        return f"Reserva {self.id} - {self.nome_completo} ({self.cpf}) - {self.produto.nome}"
+
+
+class Recarga(models.Model):
+    """Modelo para registrar histórico de recargas de fichas"""
+    ficha = models.ForeignKey(Ficha, on_delete=models.CASCADE, related_name='recargas')
+    produto = models.ForeignKey(Produto, on_delete=models.PROTECT, related_name='recargas', null=True, blank=True, help_text="Produto relacionado à recarga (opcional)")
+    caixa = models.ForeignKey(Caixa, on_delete=models.PROTECT, related_name='recargas')
+    valor = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text="Valor da recarga"
+    )
+    data = models.DateTimeField(auto_now_add=True, help_text="Data e hora da recarga")
+    observacoes = models.TextField(blank=True, help_text="Observações sobre a recarga")
+    
+    class Meta:
+        ordering = ['-data']
+        verbose_name_plural = "Recargas"
+        indexes = [
+            models.Index(fields=['ficha', 'data']),
+            models.Index(fields=['caixa', 'data']),
+            models.Index(fields=['produto', 'data']),
+        ]
+    
+    def __str__(self):
+        return f"Recarga R${self.valor} - Ficha {self.ficha.numero} - {self.caixa.nome} - {self.data.strftime('%d/%m/%Y %H:%M')}"

@@ -23,26 +23,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-jsoka*xk5w4x@u#b2^t5yrm=ve0x4!$9#6n&gwy&sxi7zcru60'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-jsoka*xk5w4x@u#b2^t5yrm=ve0x4!$9#6n&gwy&sxi7zcru60')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG = True
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 
 # ALLOWED_HOSTS = ['.vercel.app','.now.sh','127.0.0.1','localhost']
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'api-arraiatech.up.railway.app']
+# Railway deployment
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,api-arraiatech.up.railway.app').split(',')
 
 CORS_ALLOW_ALL_ORIGINS = True
 # CORS_ALLOWED_ORIGINS = [
 #     "*",
 # ]
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://arraia-tech.up.railway.app',
-    'https://api-arraiatech.up.railway.app',
-    'http://localhost:8080',
-    'http://127.0.0.1:8080',
-]
+# CSRF Trusted Origins - Railway deployment
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    'CSRF_TRUSTED_ORIGINS',
+    'https://arraia-tech.up.railway.app,https://api-arraiatech.up.railway.app,http://localhost:8080,http://127.0.0.1:8080'
+).split(',')
 
 
 # Application definition
@@ -102,9 +102,26 @@ WSGI_APPLICATION = 'projetoIntegrador1.wsgi.application'
 #     }
 # }
 
-DATABASES = {
-    'default': dj_database_url.config(default=os.environ.get('DATABASE_URL'), conn_max_age=1800)
-}
+# Database configuration for Railway (PostgreSQL) or local (SQLite)
+DATABASE_URL = os.getenv('DATABASE_URL', None)
+
+if DATABASE_URL:
+    # Railway PostgreSQL
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=1800,
+            conn_health_checks=True,
+        )
+    }
+else:
+    # Local SQLite (development)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 
@@ -143,7 +160,15 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Media files (uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Railway deployment - serve static files
+if not DEBUG:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 
 # Default primary key field type
