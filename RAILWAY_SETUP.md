@@ -29,10 +29,17 @@ Configure as seguintes variáveis de ambiente no Railway:
    - **IMPORTANTE**: Adicione o domínio fornecido pelo Railway após o deploy
 
 5. **CSRF_TRUSTED_ORIGINS** (opcional)
+
    - Origins confiáveis para CSRF separados por vírgula
    - Padrão: `https://arraia-tech.up.railway.app,https://api-arraiatech.up.railway.app,http://localhost:8080,http://127.0.0.1:8080`
    - Adicione o domínio do seu frontend Railway
    - **IMPORTANTE**: Adicione o domínio do frontend para permitir requisições
+
+6. **FRONTEND_URL** (opcional, recomendado para QR codes)
+   - URL base do frontend para geração de QR codes
+   - Padrão: `https://arraiatech.up.railway.app`
+   - Use esta variável para que os QR codes apontem para a URL correta
+   - Exemplo: `https://arraiatech.up.railway.app` (sem barra final)
 
 ## Passos para Deploy
 

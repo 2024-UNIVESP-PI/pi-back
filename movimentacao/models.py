@@ -271,7 +271,8 @@ class QRCodeReserva(models.Model):
     """QR Code para reserva antecipada"""
     codigo = models.CharField(max_length=255, unique=True, help_text="Código único do QR code")
     descricao = models.CharField(max_length=200, blank=True, help_text="Descrição opcional")
-    data_expiracao = models.DateTimeField(null=True, blank=True, help_text="Data de expiração do QR code")
+    data_inicio = models.DateTimeField(null=True, blank=True, help_text="Data e hora de início da reserva")
+    data_expiracao = models.DateTimeField(null=True, blank=True, help_text="Data e hora de expiração/fim da reserva")
     ativo = models.BooleanField(default=True)
     produtos_disponiveis = models.ManyToManyField(Produto, related_name='qr_codes_reserva', blank=True)
     data_criacao = models.DateTimeField(auto_now_add=True)
