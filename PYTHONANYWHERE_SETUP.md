@@ -13,10 +13,10 @@ This backend can run on PythonAnywhere's free plan using SQLite.
    cd ~/pi-back
    ```
 
-4. Create a virtualenv. Prefer Python 3.11 if available:
+4. Create a virtualenv. Use PythonAnywhere's real Python 3.11 binary, not the `/usr/bin` symlink:
 
    ```bash
-   mkvirtualenv --python=/usr/bin/python3.11 pi-back
+   mkvirtualenv --python=/usr/local/bin/python3.11 pi-back
    pip install -r requirements.txt
    ```
 
@@ -65,9 +65,9 @@ Add values like these before the final import:
 os.environ["SECRET_KEY"] = "replace-with-a-generated-secret-key"
 os.environ["DEBUG"] = "False"
 os.environ["ALLOWED_HOSTS"] = "motokiyo.pythonanywhere.com"
-os.environ["CSRF_TRUSTED_ORIGINS"] = "https://<your-netlify-site>.netlify.app,https://motokiyo.pythonanywhere.com"
-os.environ["CORS_ALLOWED_ORIGINS"] = "https://<your-netlify-site>.netlify.app"
-os.environ["FRONTEND_URL"] = "https://<your-netlify-site>.netlify.app"
+os.environ["CSRF_TRUSTED_ORIGINS"] = "https://arraia-tech.netlify.app,https://motokiyo.pythonanywhere.com"
+os.environ["CORS_ALLOWED_ORIGINS"] = "https://arraia-tech.netlify.app"
+os.environ["FRONTEND_URL"] = "https://arraia-tech.netlify.app"
 ```
 
 Generate a secret key with:
