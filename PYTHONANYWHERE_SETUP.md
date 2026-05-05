@@ -68,6 +68,7 @@ os.environ["ALLOWED_HOSTS"] = "motokiyo.pythonanywhere.com"
 os.environ["CSRF_TRUSTED_ORIGINS"] = "https://arraia-tech.netlify.app,https://motokiyo.pythonanywhere.com"
 os.environ["CORS_ALLOWED_ORIGINS"] = "https://arraia-tech.netlify.app"
 os.environ["FRONTEND_URL"] = "https://arraia-tech.netlify.app"
+os.environ["ADMIN_PASSWORD"] = "replace-with-a-private-admin-password"
 ```
 
 Generate a secret key with:

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.db import transaction
+from django.conf import settings
 from decimal import Decimal
 from .models import Caixa, Ficha, Produto, MovimentacaoEstoque, Venda, ReservaProduto, Recarga
 from .serializers import (
@@ -180,8 +181,7 @@ class FichaViewSet(viewsets.ModelViewSet):
         if not senha_admin:
             return Response({"detail": "Senha de administrador é obrigatória."}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Verifica senha admin (hardcoded por enquanto - admin123)
-        if senha_admin != "admin123":
+        if senha_admin != settings.ADMIN_PASSWORD:
             return Response({"detail": "Senha de administrador incorreta."}, status=status.HTTP_401_UNAUTHORIZED)
         
         ficha = self.get_object()
@@ -215,17 +215,15 @@ class FichaViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def recarga(self, request, pk=None):
         serializer = RecargaFichaSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        ficha = self.get_object()
-        valor_recarga = request.data.get('valor')
+        ficha = Ficha.objects.select_for_update().get(pk=self.get_object().pk)
+        valor_recarga = serializer.validated_data['valor']
         produto_id = request.data.get('produto_id')  # Opcional
         caixa_id = request.data.get('caixa_id')  # Obrigatório para registrar histórico
-
-        if valor_recarga is None:
-            return Response({"detail": "O valor de recarga é obrigatório."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Realiza a recarga
@@ -376,4 +374,3 @@ class ReservaProdutoViewSet(viewsets.ModelViewSet):
         reserva.save()
         
         return Response(VendaSerializer(venda).data, status=status.HTTP_200_OK)
-

@@ -41,6 +41,9 @@ ALLOWED_HOSTS = env_list(
 # Public frontend URL used when generating QR-code links.
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
 
+# Password used by the app-level admin flow for destructive operations.
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
+
 # Allow every origin only in local DEBUG mode unless explicitly overridden.
 CORS_ALLOW_ALL_ORIGINS = os.getenv(
     'CORS_ALLOW_ALL_ORIGINS',

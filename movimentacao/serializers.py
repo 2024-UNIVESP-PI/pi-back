@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import transaction
 from .models import Caixa, Ficha, Produto, MovimentacaoEstoque, Venda, ReservaProduto, QRCodeReserva, Recarga
 
 class CaixaSerializer(serializers.ModelSerializer):
@@ -69,38 +70,40 @@ class ProdutoSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def create(self, validated_data):
-        estoque = validated_data.pop('estoque', 0)
-        produto = Produto.objects.create(**validated_data)
-        if estoque > 0:
-            MovimentacaoEstoque.objects.create(
-                produto=produto,
-                quantidade=estoque,
-                tipo='E',
-                caixa=produto.caixa
-            )
-        return produto
+        with transaction.atomic():
+            estoque = validated_data.pop('estoque', 0)
+            produto = Produto.objects.create(**validated_data)
+            if estoque > 0:
+                MovimentacaoEstoque.objects.create(
+                    produto=produto,
+                    quantidade=estoque,
+                    tipo='E',
+                    caixa=produto.caixa
+                )
+            return produto
 
     def update(self, instance, validated_data):
-        estoque_novo = validated_data.pop('estoque', None)
+        with transaction.atomic():
+            estoque_novo = validated_data.pop('estoque', None)
 
-        # Atualiza os demais campos
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
+            # Atualiza os demais campos
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
 
-        # Se a quantidade de estoque foi informada, trata movimentação
-        if estoque_novo is not None and estoque_novo != instance.estoque:
-            diferenca = estoque_novo - instance.estoque
-            tipo_mov = 'E' if diferenca > 0 else 'S'
-            MovimentacaoEstoque.objects.create(
-                produto=instance,
-                quantidade=abs(diferenca),
-                tipo=tipo_mov,
-                caixa=instance.caixa
-            )
-            instance.estoque = estoque_novo
+            # Se a quantidade de estoque foi informada, trata movimentação
+            if estoque_novo is not None and estoque_novo != instance.estoque:
+                diferenca = estoque_novo - instance.estoque
+                tipo_mov = 'E' if diferenca > 0 else 'S'
+                MovimentacaoEstoque.objects.create(
+                    produto=instance,
+                    quantidade=abs(diferenca),
+                    tipo=tipo_mov,
+                    caixa=instance.caixa
+                )
+                instance.estoque = estoque_novo
 
-        instance.save()
-        return instance
+            instance.save()
+            return instance
 
 class MovimentacaoEstoqueSerializer(serializers.ModelSerializer):
     class Meta:
@@ -128,11 +131,12 @@ class VendaSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def create(self, validated_data):
-        movimentacao_data = validated_data.pop('movimentacao')
-        movimentacao_data['tipo'] = 'S'
-        movimentacao = MovimentacaoEstoque.objects.create(**movimentacao_data)
-        venda = Venda.objects.create(movimentacao=movimentacao, **validated_data)
-        return venda
+        with transaction.atomic():
+            movimentacao_data = validated_data.pop('movimentacao')
+            movimentacao_data['tipo'] = 'S'
+            movimentacao = MovimentacaoEstoque.objects.create(**movimentacao_data)
+            venda = Venda.objects.create(movimentacao=movimentacao, **validated_data)
+            return venda
     
     def to_representation(self, instance):
         representation = super().to_representation(instance)

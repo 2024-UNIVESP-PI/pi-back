@@ -2,6 +2,7 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
+from django.db import transaction
 from decimal import Decimal
 
 class Caixa(models.Model):
@@ -142,54 +143,59 @@ class MovimentacaoEstoque(models.Model):
                 raise ValidationError("Não é possível ter estoque negativo após a movimentação.")
 
     def save(self, *args, **kwargs):
-        # Antes de salvar, executa validações
-        self.full_clean()
-        
-        tipo = self.tipo
-        quantidade = self.quantidade
-        estoque = self.produto.estoque
-        
-        # Se tiver pk (movimentação já existe)
-        if self.pk:
-            movimentacao = self.__class__.objects.get(pk=self.pk)
-            diferenca = quantidade - movimentacao.quantidade
+        with transaction.atomic():
+            self.produto = Produto.objects.select_for_update().get(pk=self.produto_id)
+
+            # Antes de salvar, executa validações
+            self.full_clean()
             
-            if tipo == 'S':
-                estoque -= diferenca
-            elif tipo == 'E':
-                estoque += diferenca
+            tipo = self.tipo
+            quantidade = self.quantidade
+            estoque = self.produto.estoque
+            
+            # Se tiver pk (movimentação já existe)
+            if self.pk:
+                movimentacao = self.__class__.objects.get(pk=self.pk)
+                diferenca = quantidade - movimentacao.quantidade
+                
+                if tipo == 'S':
+                    estoque -= diferenca
+                elif tipo == 'E':
+                    estoque += diferenca
 
-        # Se não tiver pk (movimentação nova, ainda não existe)
-        else:
-            if tipo == 'S':
-                estoque -= quantidade
-            elif tipo == 'E':
-                estoque += quantidade
+            # Se não tiver pk (movimentação nova, ainda não existe)
+            else:
+                if tipo == 'S':
+                    estoque -= quantidade
+                elif tipo == 'E':
+                    estoque += quantidade
 
-        # Salva a movimentação
-        super().save(*args, **kwargs)
-        
-        # Atualiza o estoque do produto
-        self.produto.atualizar_estoque(estoque)
+            # Salva a movimentação
+            super().save(*args, **kwargs)
+            
+            # Atualiza o estoque do produto
+            self.produto.atualizar_estoque(estoque)
         
     def delete(self, *args, **kwargs):
-        tipo = self.tipo
-        quantidade = self.quantidade
-        estoque = self.produto.estoque
-        
-        # Se for apagar uma entrada, verifica se há estoque suficiente
-        if tipo == 'E':
-            if estoque < quantidade:
-                raise ValidationError("Estoque insuficiente para apagar movimentação de entrada.")
-            estoque -= quantidade
-        elif tipo == 'S':
-            estoque += quantidade
-        
-        # Deleta a movimentação
-        super().delete(*args, **kwargs)
-        
-        # Atualiza o estoque do produto
-        self.produto.atualizar_estoque(estoque)
+        with transaction.atomic():
+            self.produto = Produto.objects.select_for_update().get(pk=self.produto_id)
+            tipo = self.tipo
+            quantidade = self.quantidade
+            estoque = self.produto.estoque
+            
+            # Se for apagar uma entrada, verifica se há estoque suficiente
+            if tipo == 'E':
+                if estoque < quantidade:
+                    raise ValidationError("Estoque insuficiente para apagar movimentação de entrada.")
+                estoque -= quantidade
+            elif tipo == 'S':
+                estoque += quantidade
+            
+            # Deleta a movimentação
+            super().delete(*args, **kwargs)
+            
+            # Atualiza o estoque do produto
+            self.produto.atualizar_estoque(estoque)
 
 class Venda(models.Model):
     movimentacao = models.OneToOneField(MovimentacaoEstoque, on_delete=models.CASCADE)
@@ -243,28 +249,31 @@ class Venda(models.Model):
             raise ValidationError("Saldo insuficiente para venda.")
     
     def save(self, *args, **kwargs):
-        # Antes de salvar, executa validações
-        self.full_clean()
-        
-        preco_total = self.preco_total
-        saldo_ficha = self.ficha.saldo
-        
-        if self.pk:
-            venda = self.__class__.objects.get(pk=self.pk)
-            diferenca = preco_total - venda.preco_total
+        with transaction.atomic():
+            self.ficha = Ficha.objects.select_for_update().get(pk=self.ficha_id)
+
+            # Antes de salvar, executa validações
+            self.full_clean()
             
-            # Atualiza saldo da ficha
-            saldo_ficha -= diferenca
-        else:
-            # Reduz saldo da ficha
-            saldo_ficha -= preco_total
-        
-        # Salva novo saldo da ficha
-        self.ficha.saldo = saldo_ficha
-        self.ficha.save()
-        
-        # Salva a movimentação
-        super().save(*args, **kwargs)
+            preco_total = self.preco_total
+            saldo_ficha = self.ficha.saldo
+            
+            if self.pk:
+                venda = self.__class__.objects.get(pk=self.pk)
+                diferenca = preco_total - venda.preco_total
+                
+                # Atualiza saldo da ficha
+                saldo_ficha -= diferenca
+            else:
+                # Reduz saldo da ficha
+                saldo_ficha -= preco_total
+            
+            # Salva novo saldo da ficha
+            self.ficha.saldo = saldo_ficha
+            self.ficha.save()
+            
+            # Salva a movimentação
+            super().save(*args, **kwargs)
 
 
 class QRCodeReserva(models.Model):
