@@ -4,6 +4,7 @@ from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from django.utils.crypto import constant_time_compare
 from django.db.models.functions import Lower
+from django.db.models import Sum
 from django.utils import timezone
 from django.db import transaction
 from django.conf import settings
@@ -79,6 +80,68 @@ def admin_login(request):
         )
 
     return Response({"is_admin": True}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def movimentacoes_financeiras(request):
+    """Retorna o extrato financeiro consolidado de recargas e vendas."""
+    recargas = Recarga.objects.select_related('ficha', 'caixa', 'produto').order_by('-data')
+    vendas = Venda.objects.select_related(
+        'ficha',
+        'movimentacao__caixa',
+        'movimentacao__produto',
+    ).order_by('-movimentacao__data')
+
+    movimentos = []
+
+    for recarga in recargas:
+        movimentos.append({
+            'id': f'recarga-{recarga.id}',
+            'tipo': 'recarga',
+            'data': recarga.data,
+            'ficha_id': recarga.ficha_id,
+            'ficha_numero': recarga.ficha.numero,
+            'caixa_id': recarga.caixa_id,
+            'caixa_nome': recarga.caixa.nome,
+            'produto_nome': recarga.produto.nome if recarga.produto else None,
+            'descricao': recarga.observacoes or 'Recarga de ficha',
+            'quantidade': None,
+            'valor': recarga.valor,
+            'direcao': 'entrada',
+        })
+
+    for venda in vendas:
+        movimentos.append({
+            'id': f'venda-{venda.id}',
+            'tipo': 'venda',
+            'data': venda.movimentacao.data,
+            'ficha_id': venda.ficha_id,
+            'ficha_numero': venda.ficha.numero,
+            'caixa_id': venda.movimentacao.caixa_id,
+            'caixa_nome': venda.movimentacao.caixa.nome,
+            'produto_nome': venda.movimentacao.produto.nome,
+            'descricao': f'Venda de {venda.movimentacao.produto.nome}',
+            'quantidade': venda.movimentacao.quantidade,
+            'valor': venda.preco_total,
+            'direcao': 'saida',
+        })
+
+    movimentos.sort(key=lambda item: item['data'], reverse=True)
+
+    total_recargas = recargas.aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
+    total_vendas = sum((venda.preco_total for venda in vendas), Decimal('0.00'))
+    saldo_fichas = Ficha.objects.aggregate(total=Sum('saldo'))['total'] or Decimal('0.00')
+
+    return Response({
+        'summary': {
+            'entradas': total_recargas,
+            'saidas': total_vendas,
+            'saldo_movimentado': total_recargas - total_vendas,
+            'saldo_fichas': saldo_fichas,
+            'total_movimentacoes': len(movimentos),
+        },
+        'movimentacoes': movimentos,
+    })
 
 class FichaViewSet(viewsets.ModelViewSet):
     queryset = Ficha.objects.all().order_by('numero')

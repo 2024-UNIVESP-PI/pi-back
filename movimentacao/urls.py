@@ -7,7 +7,8 @@ from .views import (
     MovimentacaoEstoqueViewSet,
     VendaViewSet,
     ReservaProdutoViewSet,
-    admin_login
+    admin_login,
+    movimentacoes_financeiras,
 )
 from .views_reserva import (
     QRCodeReservaViewSet,
@@ -28,6 +29,7 @@ router.register(r'qr-codes-reserva', QRCodeReservaViewSet, basename='qr-code-res
 urlpatterns = [
     path('', include(router.urls)),
     path('admin-login/', admin_login, name='admin-login'),
+    path('movimentacoes-financeiras/', movimentacoes_financeiras, name='movimentacoes-financeiras'),
     # Endpoints públicos para reservas
     path('reservas-publicas/<str:qr_code>/produtos/', reserva_publica_produtos, name='reserva-publica-produtos'),
     path('reservas-publicas/criar/', criar_reserva_publica, name='criar-reserva-publica'),
