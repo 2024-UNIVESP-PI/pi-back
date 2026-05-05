@@ -42,6 +42,7 @@ ALLOWED_HOSTS = env_list(
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
 
 # Password used by the app-level admin flow for destructive operations.
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 
 # Allow every origin only in local DEBUG mode unless explicitly overridden.

@@ -4,9 +4,9 @@ from django.core.exceptions import ValidationError
 from .models import Caixa, Ficha, Produto, MovimentacaoEstoque, Venda
 
 class CaixaAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nome')
+    list_display = ('id', 'nome', 'usuario')
     # list_filter = ()
-    search_fields = ('nome',)
+    search_fields = ('nome', 'usuario')
 
 admin.site.register(Caixa, CaixaAdmin)
 
@@ -28,6 +28,11 @@ class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
     list_display = ('produto', 'tipo', 'quantidade', 'caixa')
     list_filter = ('tipo',)
     search_fields = ('produto__nome',)
+    
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return ('produto', 'tipo')
+        return ()
     
     # Sobrescreve a ação de deleção em massa
     def delete_queryset(self, request, queryset):
@@ -59,6 +64,7 @@ admin.site.register(MovimentacaoEstoque, MovimentacaoEstoqueAdmin)
 class VendaAdmin(admin.ModelAdmin):
     list_display = ('caixa', 'produto', 'quantidade', 'preco_total', 'numero_ficha', 'data')
     list_filter = ('movimentacao__caixa',)
+    readonly_fields = ('valor_unitario', 'valor_total')
 
     def numero_ficha(self, obj):
         return obj.ficha.numero

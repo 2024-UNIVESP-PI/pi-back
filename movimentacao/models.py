@@ -3,12 +3,24 @@ from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from django.db import transaction
+from django.contrib.auth.hashers import check_password, identify_hasher, make_password
 from decimal import Decimal
+
+
+def is_encoded_password(value):
+    if not value:
+        return False
+    try:
+        identify_hasher(value)
+    except ValueError:
+        return False
+    return True
+
 
 class Caixa(models.Model):
     nome = models.CharField(max_length=200)
     usuario = models.CharField(max_length=100, unique=True, null=True, blank=True, help_text="Usuário para login do caixa")
-    senha = models.CharField(max_length=255, null=True, blank=True, help_text="Senha (armazenada em texto simples - NÃO recomendado para produção)")
+    senha = models.CharField(max_length=255, null=True, blank=True, help_text="Senha armazenada com hash")
     
     class Meta:
         verbose_name_plural = "Caixas"
@@ -18,6 +30,21 @@ class Caixa(models.Model):
     
     def __str__(self):
         return f"{self.nome} ({self.usuario})"
+
+    def set_senha(self, raw_password):
+        self.senha = make_password(raw_password)
+
+    def check_senha(self, raw_password):
+        if not self.senha:
+            return False
+        if is_encoded_password(self.senha):
+            return check_password(raw_password, self.senha)
+        return self.senha == raw_password
+
+    def save(self, *args, **kwargs):
+        if self.senha and not is_encoded_password(self.senha):
+            self.set_senha(self.senha)
+        super().save(*args, **kwargs)
     
 class Ficha(models.Model):
     numero = models.PositiveSmallIntegerField(unique=True)
@@ -126,6 +153,10 @@ class MovimentacaoEstoque(models.Model):
         # Se tiver pk (movimentação já existe), calcula a diferença da quantidade
         if self.pk:
             movimentacao = self.__class__.objects.get(pk=self.pk)
+            if movimentacao.produto_id != self.produto_id:
+                raise ValidationError("Não é permitido alterar o produto de uma movimentação de estoque.")
+            if movimentacao.tipo != tipo:
+                raise ValidationError("Não é permitido alterar o tipo de uma movimentação de estoque.")
             diferenca = quantidade - movimentacao.quantidade
             
             # Verifica se pode atualizar movimentação
@@ -200,6 +231,8 @@ class MovimentacaoEstoque(models.Model):
 class Venda(models.Model):
     movimentacao = models.OneToOneField(MovimentacaoEstoque, on_delete=models.CASCADE)
     ficha = models.ForeignKey(Ficha, on_delete=models.PROTECT, related_name='compras')
+    valor_unitario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, editable=False)
+    valor_total = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, editable=False)
     
     @property
     def caixa(self):
@@ -219,9 +252,13 @@ class Venda(models.Model):
         
     @property
     def preco_total(self):
-        movimentacao = self.movimentacao
-        produto = movimentacao.produto
-        return produto.preco * movimentacao.quantidade
+        if self.valor_total is not None:
+            return self.valor_total
+        return self.movimentacao.produto.preco * self.movimentacao.quantidade
+
+    def calcular_preco_total(self):
+        valor_unitario = self.valor_unitario or self.movimentacao.produto.preco
+        return valor_unitario * self.movimentacao.quantidade
     
     def __str__(self):
         return f"{self.movimentacao} - Ficha {self.ficha}"
@@ -251,6 +288,9 @@ class Venda(models.Model):
     def save(self, *args, **kwargs):
         with transaction.atomic():
             self.ficha = Ficha.objects.select_for_update().get(pk=self.ficha_id)
+            if self.valor_unitario is None:
+                self.valor_unitario = self.movimentacao.produto.preco
+            self.valor_total = self.calcular_preco_total()
 
             # Antes de salvar, executa validações
             self.full_clean()

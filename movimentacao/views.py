@@ -1,7 +1,8 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
+from django.utils.crypto import constant_time_compare
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.db import transaction
@@ -36,7 +37,10 @@ class CaixaViewSet(viewsets.ModelViewSet):
         
         try:
             caixa = Caixa.objects.get(usuario=usuario)
-            if caixa.senha == senha:
+            if caixa.check_senha(senha):
+                if caixa.senha and not caixa.senha.startswith(('pbkdf2_', 'argon2', 'bcrypt')):
+                    caixa.set_senha(senha)
+                    caixa.save(update_fields=['senha'])
                 serializer = CaixaSerializer(caixa)
                 return Response(serializer.data, status=status.HTTP_200_OK)
             else:
@@ -49,6 +53,32 @@ class CaixaViewSet(viewsets.ModelViewSet):
                 {"detail": "Usuário ou senha inválidos."},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+
+
+@api_view(['POST'])
+def admin_login(request):
+    """Endpoint para login do administrador do sistema."""
+    username = request.data.get('username') or request.data.get('usuario')
+    password = request.data.get('password') or request.data.get('senha')
+
+    if not username or not password:
+        return Response(
+            {"detail": "Usuário e senha são obrigatórios."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    is_valid = (
+        constant_time_compare(username, settings.ADMIN_USERNAME) and
+        constant_time_compare(password, settings.ADMIN_PASSWORD)
+    )
+
+    if not is_valid:
+        return Response(
+            {"detail": "Usuário ou senha inválidos."},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    return Response({"is_admin": True}, status=status.HTTP_200_OK)
 
 class FichaViewSet(viewsets.ModelViewSet):
     queryset = Ficha.objects.all().order_by('numero')
@@ -343,6 +373,7 @@ class ReservaProdutoViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def confirmar(self, request, pk=None):
         """Confirma reserva e converte em venda"""
         reserva = self.get_object()

@@ -3,34 +3,28 @@ from django.db import transaction
 from .models import Caixa, Ficha, Produto, MovimentacaoEstoque, Venda, ReservaProduto, QRCodeReserva, Recarga
 
 class CaixaSerializer(serializers.ModelSerializer):
-    senha = serializers.CharField(required=False, allow_blank=True, read_only=False)
+    senha = serializers.CharField(required=False, allow_blank=True, write_only=True)
     senha_atual = serializers.CharField(write_only=True, required=False, allow_blank=True)
     
     class Meta:
         model = Caixa
         fields = '__all__'
     
-    def to_representation(self, instance):
-        """Retorna senha na representação (para admin)"""
-        representation = super().to_representation(instance)
-        # Inclui senha diretamente do modelo
-        if hasattr(instance, 'senha') and instance.senha:
-            representation['senha'] = instance.senha
-        return representation
-    
     def create(self, validated_data):
         """Cria caixa com senha"""
         senha = validated_data.pop('senha', '')
         if not senha:
             raise serializers.ValidationError({'senha': 'Senha é obrigatória ao criar caixa'})
-        caixa = Caixa.objects.create(**validated_data, senha=senha)
+        caixa = Caixa(**validated_data)
+        caixa.set_senha(senha)
+        caixa.save()
         return caixa
     
     def update(self, instance, validated_data):
         """Atualiza caixa, mantendo senha se não fornecida"""
         senha = validated_data.pop('senha', None)
         if senha:
-            instance.senha = senha
+            instance.set_senha(senha)
         elif 'senha' in validated_data:
             # Se senha foi enviada vazia, não atualiza
             validated_data.pop('senha', None)

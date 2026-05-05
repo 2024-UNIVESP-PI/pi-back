@@ -1,7 +1,8 @@
 from decimal import Decimal
 
+from django.contrib.auth.hashers import check_password
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from .models import Caixa, Ficha, MovimentacaoEstoque, Produto, Venda
 from .serializers import VendaSerializer
@@ -71,6 +72,54 @@ class TestEstoquePersistence(TestCase):
         self.assertEqual(Venda.objects.count(), 0)
         self.assertEqual(MovimentacaoEstoque.objects.count(), 1)
 
+    def test_existing_stock_movement_cannot_change_product_or_type(self):
+        outro_produto = Produto.objects.create(
+            caixa=self.caixa,
+            nome="Suco",
+            medida="UN",
+            preco=Decimal("4.00"),
+        )
+        movimentacao = MovimentacaoEstoque.objects.create(
+            caixa=self.caixa,
+            produto=self.produto,
+            quantidade=5,
+            tipo="E",
+        )
+
+        movimentacao.produto = outro_produto
+        with self.assertRaises(ValidationError):
+            movimentacao.save()
+
+        movimentacao.refresh_from_db()
+        movimentacao.tipo = "S"
+        with self.assertRaises(ValidationError):
+            movimentacao.save()
+
+    def test_sale_keeps_historical_price_after_product_price_changes(self):
+        MovimentacaoEstoque.objects.create(
+            caixa=self.caixa,
+            produto=self.produto,
+            quantidade=2,
+            tipo="E",
+        )
+        ficha = Ficha.objects.create(numero=2, saldo=Decimal("20.00"))
+        movimentacao = MovimentacaoEstoque.objects.create(
+            caixa=self.caixa,
+            produto=self.produto,
+            quantidade=2,
+            tipo="S",
+        )
+        venda = Venda.objects.create(movimentacao=movimentacao, ficha=ficha)
+
+        self.assertEqual(venda.valor_unitario, Decimal("5.00"))
+        self.assertEqual(venda.preco_total, Decimal("10.00"))
+
+        self.produto.preco = Decimal("8.00")
+        self.produto.save()
+        venda.refresh_from_db()
+
+        self.assertEqual(venda.preco_total, Decimal("10.00"))
+
 
 class TestFichaPersistence(TestCase):
     def test_recarga_action_uses_validated_decimal_value(self):
@@ -94,3 +143,46 @@ class TestFichaPersistence(TestCase):
         ficha.refresh_from_db()
         self.assertEqual(ficha.saldo, Decimal("9.75"))
         self.assertEqual(ficha.recargas.count(), 1)
+
+
+class TestAuthenticationPersistence(TestCase):
+    def test_caixa_password_is_hashed_and_login_still_works(self):
+        caixa = Caixa.objects.create(
+            nome="Caixa Principal",
+            usuario="caixa",
+            senha="123",
+        )
+
+        caixa.refresh_from_db()
+        self.assertNotEqual(caixa.senha, "123")
+        self.assertTrue(check_password("123", caixa.senha))
+
+        response = self.client.post(
+            "/movimentacao/caixas/login/",
+            data={"usuario": "caixa", "senha": "123"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("senha", response.json())
+
+    @override_settings(ADMIN_USERNAME="admin", ADMIN_PASSWORD="secret")
+    def test_admin_login_uses_backend_settings(self):
+        response = self.client.post(
+            "/movimentacao/admin-login/",
+            data={"username": "admin", "password": "secret"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"is_admin": True})
+
+    @override_settings(ADMIN_USERNAME="admin", ADMIN_PASSWORD="secret")
+    def test_admin_login_rejects_invalid_credentials(self):
+        response = self.client.post(
+            "/movimentacao/admin-login/",
+            data={"username": "admin", "password": "wrong"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401)
