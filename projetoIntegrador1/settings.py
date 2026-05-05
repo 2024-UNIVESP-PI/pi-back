@@ -35,7 +35,7 @@ DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 
 ALLOWED_HOSTS = env_list(
     'ALLOWED_HOSTS',
-    'localhost,127.0.0.1,.pythonanywhere.com,api-arraiatech.up.railway.app'
+    'localhost,127.0.0.1,.pythonanywhere.com'
 )
 
 # Public frontend URL used when generating QR-code links.
@@ -124,11 +124,10 @@ WSGI_APPLICATION = 'projetoIntegrador1.wsgi.application'
 #     }
 # }
 
-# Database configuration for Railway (PostgreSQL) or local (SQLite)
+# Database configuration for hosted PostgreSQL or local SQLite.
 DATABASE_URL = os.getenv('DATABASE_URL', None)
 
 if DATABASE_URL:
-    # Railway PostgreSQL
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
@@ -187,7 +186,6 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Railway deployment - serve static files
 if not DEBUG:
     STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 

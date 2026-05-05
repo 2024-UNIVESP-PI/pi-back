@@ -1,8 +1,7 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.db.models import Sum, Count, F, DecimalField, ExpressionWrapper, Avg
+from django.db.models import Sum, Count
 from django.utils.timezone import localtime, now, timedelta
-from datetime import datetime
 from collections import defaultdict
 from movimentacao.models import Venda, Produto, ReservaProduto
 
@@ -13,11 +12,6 @@ def dashboard_data(request):
         'movimentacao__produto',
         'movimentacao__caixa',
         'ficha'
-    ).annotate(
-        valor_total=ExpressionWrapper(
-            F('movimentacao__produto__preco') * F('movimentacao__quantidade'),
-            output_field=DecimalField()
-        )
     )
 
     total_vendas = vendas.count()
@@ -96,7 +90,7 @@ def dashboard_data(request):
                 "produto": produto.nome if produto else "N/A",
                 "produto_nome": produto.nome if produto else "N/A",
                 "produto_categoria": (produto.categoria or "Sem categoria") if produto else "Sem categoria",
-                "produto_preco": float(produto.preco) if produto else 0,
+                "produto_preco": float(v.valor_unitario or produto.preco) if produto else 0,
                 "categoria": (produto.categoria or "Sem categoria") if produto else "Sem categoria",
                 "quantidade": v.movimentacao.quantidade,
                 "valorTotal": float(v.valor_total),
