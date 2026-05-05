@@ -1,8 +1,7 @@
 import os
 import sys
 
-# Replace "your-pythonanywhere-username" with your PythonAnywhere username.
-path = "/home/your-pythonanywhere-username/pi-back"
+path = "/home/motokiyo/pi-back"
 if path not in sys.path:
     sys.path.append(path)
 

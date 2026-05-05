@@ -36,32 +36,24 @@ This backend can run on PythonAnywhere's free plan using SQLite.
 4. Set **Source code** to:
 
    ```text
-   /home/<your-pythonanywhere-username>/pi-back
+   /home/motokiyo/pi-back
    ```
 
 5. Set **Working directory** to:
 
    ```text
-   /home/<your-pythonanywhere-username>/pi-back
+   /home/motokiyo/pi-back
    ```
 
 6. Set **Virtualenv** to:
 
    ```text
-   /home/<your-pythonanywhere-username>/.virtualenvs/pi-back
+   /home/motokiyo/.virtualenvs/pi-back
    ```
 
 ## 3. Configure WSGI
 
 Open the WSGI file from the PythonAnywhere **Web** tab and replace its contents with the contents of `pythonanywhere_wsgi.py.example`.
-
-Then replace:
-
-```text
-your-pythonanywhere-username
-```
-
-with your actual PythonAnywhere username.
 
 ## 4. Configure environment variables
 
@@ -72,8 +64,8 @@ Add values like these before the final import:
 ```python
 os.environ["SECRET_KEY"] = "replace-with-a-generated-secret-key"
 os.environ["DEBUG"] = "False"
-os.environ["ALLOWED_HOSTS"] = "<your-pythonanywhere-username>.pythonanywhere.com"
-os.environ["CSRF_TRUSTED_ORIGINS"] = "https://<your-netlify-site>.netlify.app,https://<your-pythonanywhere-username>.pythonanywhere.com"
+os.environ["ALLOWED_HOSTS"] = "motokiyo.pythonanywhere.com"
+os.environ["CSRF_TRUSTED_ORIGINS"] = "https://<your-netlify-site>.netlify.app,https://motokiyo.pythonanywhere.com"
 os.environ["CORS_ALLOWED_ORIGINS"] = "https://<your-netlify-site>.netlify.app"
 os.environ["FRONTEND_URL"] = "https://<your-netlify-site>.netlify.app"
 ```
@@ -90,12 +82,12 @@ In the PythonAnywhere **Web** tab, add static file mappings:
 
 ```text
 URL: /static/
-Directory: /home/<your-pythonanywhere-username>/pi-back/staticfiles
+Directory: /home/motokiyo/pi-back/staticfiles
 ```
 
 ```text
 URL: /media/
-Directory: /home/<your-pythonanywhere-username>/pi-back/media
+Directory: /home/motokiyo/pi-back/media
 ```
 
 ## 6. Reload
@@ -105,13 +97,13 @@ Click **Reload** on the PythonAnywhere **Web** tab.
 The backend should be available at:
 
 ```text
-https://<your-pythonanywhere-username>.pythonanywhere.com/
+https://motokiyo.pythonanywhere.com/
 ```
 
 The Django admin should be available at:
 
 ```text
-https://<your-pythonanywhere-username>.pythonanywhere.com/admin/
+https://motokiyo.pythonanywhere.com/admin/
 ```
 
 ## Updating Later
