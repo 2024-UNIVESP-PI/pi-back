@@ -12,7 +12,6 @@ import uuid
 import qrcode
 import base64
 from io import BytesIO
-import os
 
 from .models import QRCodeReserva, ReservaProduto, Produto
 from .serializers import (
@@ -121,13 +120,10 @@ class QRCodeReservaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
-        # Obtém URL base do frontend (usa variável de ambiente ou fallback)
-        frontend_url = os.getenv('FRONTEND_URL', 'https://arraiatech.up.railway.app')
-        # Remove barra final se houver
-        frontend_url = frontend_url.rstrip('/')
+        frontend_url = settings.FRONTEND_URL
         # Em desenvolvimento local, usa localhost
         if settings.DEBUG and 'localhost' in str(request.get_host()):
-            frontend_url = 'http://localhost:8080'
+            frontend_url = 'http://localhost:5173'
         
         # URL completa para o QR code
         qr_url = f"{frontend_url}/reservas/{qr_code.codigo}"
@@ -639,4 +635,3 @@ def reservas_por_cpf(request):
         'reservas': serializer.data,
         'total': total
     })
-

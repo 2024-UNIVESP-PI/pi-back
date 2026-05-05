@@ -1,0 +1,13 @@
+import os
+import sys
+
+# Replace "your-pythonanywhere-username" with your PythonAnywhere username.
+path = "/home/your-pythonanywhere-username/pi-back"
+if path not in sys.path:
+    sys.path.append(path)
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "projetoIntegrador1.settings")
+
+from django.core.wsgi import get_wsgi_application
+
+application = get_wsgi_application()

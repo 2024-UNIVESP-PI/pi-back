@@ -15,6 +15,10 @@ import os
 import dj_database_url
 
 
+def env_list(name, default=''):
+    return [item.strip() for item in os.getenv(name, default).split(',') if item.strip()]
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -29,20 +33,34 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-jsoka*xk5w4x@u#b2^t5yrm=ve
 # DEBUG = True
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 
-# ALLOWED_HOSTS = ['.vercel.app','.now.sh','127.0.0.1','localhost']
-# Railway deployment
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,api-arraiatech.up.railway.app').split(',')
+ALLOWED_HOSTS = env_list(
+    'ALLOWED_HOSTS',
+    'localhost,127.0.0.1,.pythonanywhere.com,api-arraiatech.up.railway.app'
+)
 
-CORS_ALLOW_ALL_ORIGINS = True
-# CORS_ALLOWED_ORIGINS = [
-#     "*",
-# ]
+# Public frontend URL used when generating QR-code links.
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
 
-# CSRF Trusted Origins - Railway deployment
-CSRF_TRUSTED_ORIGINS = os.getenv(
+# Allow every origin only in local DEBUG mode unless explicitly overridden.
+CORS_ALLOW_ALL_ORIGINS = os.getenv(
+    'CORS_ALLOW_ALL_ORIGINS',
+    'True' if DEBUG else 'False'
+).lower() in ('true', '1', 't')
+
+CORS_ALLOWED_ORIGINS = env_list(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080'
+)
+
+CORS_ALLOWED_ORIGIN_REGEXES = env_list(
+    'CORS_ALLOWED_ORIGIN_REGEXES',
+    ''
+)
+
+CSRF_TRUSTED_ORIGINS = env_list(
     'CSRF_TRUSTED_ORIGINS',
-    'https://arraia-tech.up.railway.app,https://api-arraiatech.up.railway.app,http://localhost:8080,http://127.0.0.1:8080'
-).split(',')
+    'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080'
+)
 
 
 # Application definition
