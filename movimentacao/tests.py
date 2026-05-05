@@ -4,7 +4,7 @@ from django.contrib.auth.hashers import check_password
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 
-from .models import Caixa, Ficha, MovimentacaoEstoque, Produto, Venda
+from .models import Caixa, Ficha, MovimentacaoEstoque, Produto, QRCodeReserva, Venda
 from .serializers import VendaSerializer
 
 
@@ -186,3 +186,68 @@ class TestAuthenticationPersistence(TestCase):
         )
 
         self.assertEqual(response.status_code, 401)
+
+
+class TestQRCodeReservationFlow(TestCase):
+    def setUp(self):
+        self.caixa = Caixa.objects.create(
+            nome="Caixa Principal",
+            usuario="caixa",
+            senha="123",
+        )
+        self.produto_permitido = Produto.objects.create(
+            caixa=self.caixa,
+            nome="Bolo",
+            medida="UN",
+            preco=Decimal("6.00"),
+            disponivel_reserva=True,
+            limite_reserva=2,
+            quantidade_reserva_disponivel=5,
+        )
+        self.produto_fora_qr = Produto.objects.create(
+            caixa=self.caixa,
+            nome="Suco",
+            medida="UN",
+            preco=Decimal("4.00"),
+            disponivel_reserva=True,
+            limite_reserva=2,
+            quantidade_reserva_disponivel=5,
+        )
+        self.qr_code = QRCodeReserva.objects.create(
+            codigo="RESERVA-TESTE",
+            descricao="Reserva Teste",
+            ativo=True,
+        )
+        self.qr_code.produtos_disponiveis.set([self.produto_permitido])
+
+    def test_public_products_returns_availability_for_qr_products_only(self):
+        response = self.client.get(
+            "/movimentacao/reservas-publicas/RESERVA-TESTE/produtos/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["produtos"]), 1)
+        self.assertEqual(data["produtos"][0]["id"], self.produto_permitido.id)
+        self.assertEqual(data["produtos"][0]["disponivel"], 5)
+        self.assertEqual(data["produtos"][0]["reservado"], 0)
+
+    def test_public_reservation_rejects_product_outside_qr_code(self):
+        response = self.client.post(
+            "/movimentacao/reservas-publicas/criar/",
+            data={
+                "nome_completo": "Maria Silva",
+                "cpf": "12345678901",
+                "qr_code": "RESERVA-TESTE",
+                "produtos": [
+                    {
+                        "produto_id": self.produto_fora_qr.id,
+                        "quantidade": 1,
+                    }
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("não está disponível neste QR code", response.json()["error"])

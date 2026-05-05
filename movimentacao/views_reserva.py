@@ -5,7 +5,8 @@ from rest_framework.permissions import AllowAny
 from django.utils import timezone
 from django.utils.timezone import localtime
 from django.http import HttpResponse
-from django.db import transaction, models
+from django.db import transaction
+from django.db.models import Sum
 from django.conf import settings
 from datetime import timedelta
 import uuid
@@ -23,8 +24,12 @@ from .serializers import (
 
 
 class QRCodeReservaViewSet(viewsets.ModelViewSet):
-    queryset = QRCodeReserva.objects.all()
     serializer_class = QRCodeReservaSerializer
+
+    def get_queryset(self):
+        return QRCodeReserva.objects.prefetch_related(
+            'produtos_disponiveis'
+        ).all()
     
     def update(self, request, *args, **kwargs):
         """Atualiza QR code com suporte para data_inicio e data_expiracao"""
@@ -444,7 +449,9 @@ class QRCodeReservaViewSet(viewsets.ModelViewSet):
 def reserva_publica_produtos(request, qr_code):
     """Retorna produtos disponíveis para reserva via QR code"""
     try:
-        qr = QRCodeReserva.objects.get(codigo=qr_code, ativo=True)
+        qr = QRCodeReserva.objects.prefetch_related(
+            'produtos_disponiveis'
+        ).get(codigo=qr_code, ativo=True)
         
         agora = timezone.now()
         
@@ -462,16 +469,19 @@ def reserva_publica_produtos(request, qr_code):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Produtos disponíveis
-        produtos = qr.produtos_disponiveis.filter(disponivel_reserva=True)
+        produtos = list(qr.produtos_disponiveis.filter(disponivel_reserva=True))
+        produto_ids = [produto.id for produto in produtos]
+        reservas_por_produto = {
+            item['produto_id']: item['total'] or 0
+            for item in ReservaProduto.objects.filter(
+                produto_id__in=produto_ids,
+                status__in=['pendente', 'confirmada']
+            ).values('produto_id').annotate(total=Sum('quantidade'))
+        }
         
         produtos_data = []
         for produto in produtos:
-            reservas_ativas = ReservaProduto.objects.filter(
-                produto=produto,
-                status__in=['pendente', 'confirmada']
-            ).aggregate(total=models.Sum('quantidade'))['total'] or 0
-            
+            reservas_ativas = reservas_por_produto.get(produto.id, 0)
             disponivel = produto.quantidade_reserva_disponivel - reservas_ativas
             
             produtos_data.append({
@@ -481,6 +491,8 @@ def reserva_publica_produtos(request, qr_code):
                 'limite_reserva': produto.limite_reserva,
                 'disponivel': max(0, disponivel),
                 'categoria': produto.categoria,
+                'reservado': reservas_ativas,
+                'quantidade_reserva_disponivel': produto.quantidade_reserva_disponivel,
             })
         
         return Response({
@@ -515,7 +527,9 @@ def criar_reserva_publica(request):
     qr_code_obj = None
     if qr_code_str:
         try:
-            qr_code_obj = QRCodeReserva.objects.get(codigo=qr_code_str, ativo=True)
+            qr_code_obj = QRCodeReserva.objects.prefetch_related(
+                'produtos_disponiveis'
+            ).get(codigo=qr_code_str, ativo=True)
             agora = timezone.now()
             
             # Verifica se ainda não começou
@@ -537,6 +551,39 @@ def criar_reserva_publica(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
+    produtos_ids = [produto_data['produto_id'] for produto_data in produtos_data]
+    produtos_permitidos_ids = set()
+    if qr_code_obj:
+        produtos_permitidos_ids = set(
+            qr_code_obj.produtos_disponiveis.filter(
+                disponivel_reserva=True
+            ).values_list('id', flat=True)
+        )
+
+    produtos = {
+        produto.id: produto
+        for produto in Produto.objects.select_for_update().filter(
+            id__in=produtos_ids,
+            disponivel_reserva=True
+        )
+    }
+
+    reservas_por_produto = {
+        item['produto_id']: item['total'] or 0
+        for item in ReservaProduto.objects.filter(
+            produto_id__in=produtos_ids,
+            status__in=['pendente', 'confirmada']
+        ).values('produto_id').annotate(total=Sum('quantidade'))
+    }
+
+    produtos_com_reserva_existente = set(
+        ReservaProduto.objects.filter(
+            cpf=cpf,
+            produto_id__in=produtos_ids,
+            status__in=['pendente', 'confirmada']
+        ).values_list('produto_id', flat=True)
+    )
+
     # Cria reservas
     reservas_criadas = []
     total_geral = 0
@@ -544,12 +591,17 @@ def criar_reserva_publica(request):
     for produto_data in produtos_data:
         produto_id = produto_data['produto_id']
         quantidade = produto_data['quantidade']
-        
-        try:
-            produto = Produto.objects.get(id=produto_id, disponivel_reserva=True)
-        except Produto.DoesNotExist:
+
+        produto = produtos.get(produto_id)
+        if not produto:
             return Response(
                 {'error': f'Produto {produto_id} não encontrado ou não disponível para reserva'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if qr_code_obj and produto_id not in produtos_permitidos_ids:
+            return Response(
+                {'error': f'{produto.nome} não está disponível neste QR code'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -561,11 +613,7 @@ def criar_reserva_publica(request):
             )
         
         # Verifica disponibilidade
-        reservas_ativas = ReservaProduto.objects.filter(
-            produto=produto,
-            status__in=['pendente', 'confirmada']
-        ).aggregate(total=models.Sum('quantidade'))['total'] or 0
-        
+        reservas_ativas = reservas_por_produto.get(produto_id, 0)
         disponivel = produto.quantidade_reserva_disponivel - reservas_ativas
         
         if quantidade > disponivel:
@@ -575,13 +623,7 @@ def criar_reserva_publica(request):
             )
         
         # Verifica se já existe reserva ativa do mesmo CPF para este produto
-        reserva_existente = ReservaProduto.objects.filter(
-            cpf=cpf,
-            produto=produto,
-            status__in=['pendente', 'confirmada']
-        ).first()
-        
-        if reserva_existente:
+        if produto_id in produtos_com_reserva_existente:
             return Response(
                 {'error': f'Já existe uma reserva ativa para {produto.nome} com este CPF'},
                 status=status.HTTP_400_BAD_REQUEST

@@ -216,9 +216,10 @@ class QRCodeReservaSerializer(serializers.ModelSerializer):
             import qrcode
             import base64
             from io import BytesIO
+            from django.conf import settings
             
             qr = qrcode.QRCode(version=1, box_size=10, border=5)
-            qr.add_data(obj.codigo)
+            qr.add_data(f"{settings.FRONTEND_URL}/reservas/{obj.codigo}")
             qr.make(fit=True)
             img = qr.make_image(fill_color="black", back_color="white")
             
