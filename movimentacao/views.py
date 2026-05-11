@@ -136,8 +136,11 @@ def movimentacoes_financeiras(request):
         'summary': {
             'entradas': total_recargas,
             'saidas': total_vendas,
-            'saldo_movimentado': total_recargas - total_vendas,
+            'receita_reconhecida': total_vendas,
+            'saldo_movimentado': total_recargas - saldo_fichas,
             'saldo_fichas': saldo_fichas,
+            'caixa_disponivel': total_recargas - saldo_fichas,
+            'diferenca_conciliacao': total_recargas - total_vendas - saldo_fichas,
             'total_movimentacoes': len(movimentos),
         },
         'movimentacoes': movimentos,
