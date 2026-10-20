@@ -107,6 +107,7 @@ class Produto(models.Model):
     disponivel_reserva = models.BooleanField(default=False, help_text="Disponível para reserva antecipada")
     limite_reserva = models.PositiveSmallIntegerField(default=2, help_text="Limite de itens por reserva (padrão: 2)")
     quantidade_reserva_disponivel = models.PositiveSmallIntegerField(default=0, help_text="Quantidade disponível para reserva")
+    perecivel = models.BooleanField(default=False, help_text="Produto perecível incluído na previsão de demanda")
 
     data_criacao = models.DateTimeField(auto_now_add=True)
     
