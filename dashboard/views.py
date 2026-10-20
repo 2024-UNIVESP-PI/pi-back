@@ -1,6 +1,6 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.utils.timezone import localtime
 from dashboard.predictions import (
     build_daily_sales,
@@ -10,7 +10,8 @@ from dashboard.predictions import (
     predict_revenue,
     predict_stock_needs,
 )
-from movimentacao.models import Venda
+from dashboard.synthetic_forecasting import predict_product_demand
+from movimentacao.models import Produto, ReservaProduto, Venda
 
 @api_view(['GET'])
 def dashboard_data(request):
@@ -109,6 +110,22 @@ def dashboard_data(request):
     ticket_medio = float(receita) / total_vendas if total_vendas > 0 else 0
     
     predicao_receita_3dias, confianca_receita = predict_revenue(dias_ordenados)
+
+    reservas_ativas = {
+        item["produto_id"]: {
+            "quantidade": item["quantidade"],
+            "pessoas": item["pessoas"],
+        }
+        for item in ReservaProduto.objects.filter(
+            status__in=["pendente", "confirmada"]
+        ).values("produto_id").annotate(
+            quantidade=Sum("quantidade"),
+            pessoas=Count("cpf", distinct=True),
+        )
+    }
+    previsao_demanda_produtos, metadados_modelo = predict_product_demand(
+        Produto.objects.filter(perecivel=True), reservas_ativas
+    )
     
     # 7. Horários de pico (identificação simples)
     horarios_ordenados = sorted(vendas_por_horario.items(), key=lambda x: x[1], reverse=True)
@@ -138,6 +155,8 @@ def dashboard_data(request):
         "vendasDetalhadas": vendas_list,
         # Predições ML
         "predicaoDemanda": predicao_demanda,
+        "previsaoDemandaProdutos": previsao_demanda_produtos,
+        "metadadosModeloDemanda": metadados_modelo,
         "predicaoReceita3Dias": predicao_receita_3dias,
         "produtosEstoquePrevisao": produtos_estoque_previsao[:10],  # Top 10
         "produtosRiscoEstoque": produtos_risco[:5],  # Top 5 mais críticos

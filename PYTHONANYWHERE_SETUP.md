@@ -13,10 +13,10 @@ This backend can run on PythonAnywhere's free plan using SQLite.
    cd ~/pi-back
    ```
 
-4. Create a virtualenv. Use PythonAnywhere's real Python 3.11 binary, not the `/usr/bin` symlink:
+4. Create a virtualenv using Python 3.12, which matches the repository and Django 4.2's supported versions:
 
    ```bash
-   mkvirtualenv --python=/usr/local/bin/python3.11 pi-back
+   mkvirtualenv --python=/usr/local/bin/python3.12 pi-back
    pip install -r requirements.txt
    ```
 

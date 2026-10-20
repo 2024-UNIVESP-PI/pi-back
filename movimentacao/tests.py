@@ -72,6 +72,32 @@ class TestEstoquePersistence(TestCase):
         self.assertEqual(Venda.objects.count(), 0)
         self.assertEqual(MovimentacaoEstoque.objects.count(), 1)
 
+    def test_successful_sale_debits_ficha_and_stock_atomically(self):
+        MovimentacaoEstoque.objects.create(
+            caixa=self.caixa,
+            produto=self.produto,
+            quantidade=2,
+            tipo="E",
+        )
+        ficha = Ficha.objects.create(numero=3, saldo=Decimal("10.00"))
+        serializer = VendaSerializer(data={
+            "ficha": ficha.id,
+            "movimentacao": {
+                "caixa": self.caixa.id,
+                "produto": self.produto.id,
+                "quantidade": 2,
+            },
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+
+        self.produto.refresh_from_db()
+        ficha.refresh_from_db()
+        self.assertEqual(self.produto.estoque, 0)
+        self.assertEqual(ficha.saldo, Decimal("0.00"))
+        self.assertEqual(Venda.objects.count(), 1)
+
     def test_existing_stock_movement_cannot_change_product_or_type(self):
         outro_produto = Produto.objects.create(
             caixa=self.caixa,
