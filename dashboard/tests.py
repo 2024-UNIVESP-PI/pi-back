@@ -1,6 +1,8 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 
 from dashboard.synthetic_forecasting import (
     generate_synthetic_event_history,
@@ -8,6 +10,7 @@ from dashboard.synthetic_forecasting import (
     synthetic_forecast_metadata,
     train_event_forecast,
 )
+from dashboard.synthetic_history import EVENT_DAYS, EVENT_HOURS
 from movimentacao.models import Caixa, Ficha, MovimentacaoEstoque, Produto, Venda
 
 
@@ -87,18 +90,63 @@ class TestDashboardData(TestCase):
         self.assertIn("mae_baseline", data["metadadosModeloDemanda"]["avaliacao"])
         self.assertGreater(len(data["previsaoDemandaProdutos"]), 0)
 
+    def test_dashboard_uses_operational_history_when_three_complete_events_exist(self):
+        caixa = Caixa.objects.create(nome="Caixa Principal", usuario="caixa", senha="123")
+        produto = Produto.objects.create(
+            caixa=caixa,
+            nome="Pastel",
+            medida="UN",
+            preco=Decimal("8.00"),
+            perecivel=True,
+        )
+        MovimentacaoEstoque.objects.create(
+            caixa=caixa,
+            produto=produto,
+            quantidade=50,
+            tipo="E",
+        )
+        ficha = Ficha.objects.create(numero=1, saldo=Decimal("200.00"))
+
+        for dia in range(9):
+            data_venda = timezone.now() - timedelta(days=8 - dia, hours=20, minutes=10)
+            movimentacao = MovimentacaoEstoque.objects.create(
+                caixa=caixa,
+                produto=produto,
+                quantidade=2,
+                tipo="S",
+            )
+            venda = Venda.objects.create(movimentacao=movimentacao, ficha=ficha)
+            MovimentacaoEstoque.objects.filter(pk=movimentacao.pk).update(data=data_venda)
+            Venda.objects.filter(pk=venda.pk).update(
+                valor_unitario=produto.preco,
+                valor_total=produto.preco * 2,
+            )
+
+        response = self.client.get("/dashboard/data/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["metadadosModeloDemanda"]["fonteDados"], "operacional")
+        self.assertTrue(data["metadadosModeloDemanda"]["validacaoReal"])
+        self.assertEqual(data["metadadosModeloDemanda"]["avaliacao"]["eventos_treino"], 1)
+        self.assertEqual(data["metadadosModeloDemanda"]["avaliacao"]["eventos_holdout"], 2)
+        self.assertGreater(len(data["previsaoDemandaProdutos"]), 0)
+
 
 class TestSyntheticForecast(TestCase):
     def test_history_is_repeatable_and_contains_no_personal_records(self):
-        first = generate_synthetic_event_history(seed=7, event_count=4)
-        second = generate_synthetic_event_history(seed=7, event_count=4)
+        first = generate_synthetic_event_history(seed=7, event_count=5)
+        second = generate_synthetic_event_history(seed=7, event_count=5)
 
         self.assertEqual(first, second)
-        self.assertEqual(len(first), 4 * 4 * 3 * 7)
+        self.assertEqual(len(first), 5 * 4 * len(EVENT_DAYS) * len(EVENT_HOURS))
         self.assertTrue(all("cpf" not in row and "nome" not in row for row in first))
         self.assertEqual({row["event_id"] for row in first}, {
-            "synthetic-event-01", "synthetic-event-02",
-            "synthetic-event-03", "synthetic-event-04",
+            "synthetic-event-01",
+            "synthetic-event-02",
+            "synthetic-event-03",
+            "synthetic-event-04",
+            "synthetic-event-05",
         })
 
     def test_forecast_metadata_reports_event_level_holdout_and_synthetic_limit(self):
@@ -114,13 +162,13 @@ class TestSyntheticForecast(TestCase):
         self.assertIn("não validadas em eventos reais", metadata["aviso"])
 
     def test_real_history_uses_event_split_and_baseline_comparison(self):
-        history = generate_synthetic_event_history(seed=7, event_count=4)
+        history = generate_synthetic_event_history(seed=7, event_count=5)
 
         _, metadata = train_event_forecast(history, source="escola_anonimizada")
 
         self.assertEqual(metadata["fonteDados"], "escola_anonimizada")
         self.assertTrue(metadata["validacaoReal"])
-        self.assertEqual(metadata["avaliacao"]["eventos_treino"], 2)
+        self.assertEqual(metadata["avaliacao"]["eventos_treino"], 3)
         self.assertEqual(metadata["avaliacao"]["eventos_holdout"], 2)
         self.assertIsInstance(metadata["avaliacao"]["mae_holdout"], float)
         self.assertIsInstance(metadata["avaliacao"]["mae_baseline"], float)

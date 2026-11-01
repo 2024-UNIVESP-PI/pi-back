@@ -1,11 +1,25 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth.hashers import check_password
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.db.models import Sum
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
-from .models import Caixa, Ficha, MovimentacaoEstoque, Produto, QRCodeReserva, Venda
+from .models import (
+    Caixa,
+    Ficha,
+    MovimentacaoEstoque,
+    Produto,
+    QRCodeReserva,
+    Recarga,
+    ReservaProduto,
+    Venda,
+)
 from .serializers import VendaSerializer
+from publico.models import Sugestao
 
 
 class TestEstoquePersistence(TestCase):
@@ -277,3 +291,104 @@ class TestQRCodeReservationFlow(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("não está disponível neste QR code", response.json()["error"])
+
+
+class TestPopulateDevCommand(TestCase):
+    def setUp(self):
+        call_command("populate_dev", "--reset", "--history-days", "15", verbosity=0)
+
+
+    def test_populate_dev_generates_fifteen_days_of_sales_with_minimum_volume(self):
+        total_vendas = Venda.objects.count()
+        self.assertGreaterEqual(total_vendas, 300)
+        self.assertLessEqual(total_vendas, 500)
+
+        vendas = Venda.objects.select_related(
+            "movimentacao__produto",
+            "movimentacao__caixa",
+            "ficha",
+        )
+        dias_com_vendas = sorted({
+            timezone.localtime(venda.data).date() for venda in vendas
+        })
+        self.assertEqual(len(dias_com_vendas), 15)
+        self.assertEqual(dias_com_vendas[-1], timezone.localdate() - timedelta(days=1))
+
+        vendas_por_dia = {}
+        vendas_por_horario = {f"{hora:02d}h-{(hora + 1) % 24:02d}h": 0 for hora in range(24)}
+        for venda in vendas:
+            stamp = timezone.localtime(venda.data)
+            chave_dia = stamp.strftime("%Y-%m-%d")
+            vendas_por_dia[chave_dia] = vendas_por_dia.get(chave_dia, 0) + 1
+            vendas_por_horario[f"{stamp.hour:02d}h-{(stamp.hour + 1) % 24:02d}h"] += 1
+
+        pico = max(vendas_por_horario.items(), key=lambda item: item[1])
+        pico_hora = int(pico[0].split("h")[0])
+        self.assertGreaterEqual(pico_hora, 18)
+        self.assertLessEqual(pico_hora, 21)
+
+        dias_primeiros_trinta = [
+            (dias_com_vendas[0] + timedelta(days=i)).strftime("%Y-%m-%d")
+            for i in range(3)
+        ]
+        self.assertGreater(
+            sum(vendas_por_dia.values()),
+            sum(vendas_por_dia.get(dia, 0) for dia in dias_primeiros_trinta),
+        )
+
+    def test_populate_dev_keeps_stock_movements_consistent(self):
+        movimentacoes = MovimentacaoEstoque.objects.select_related("produto").all()
+        self.assertGreater(len(movimentacoes), 0)
+
+        por_produto = {}
+        for movimentacao in movimentacoes:
+            total_atual = por_produto.get(movimentacao.produto_id, 0)
+            por_produto[movimentacao.produto_id] = (
+                total_atual - movimentacao.quantidade
+                if movimentacao.tipo == "S"
+                else total_atual + movimentacao.quantidade
+            )
+
+        for produto_id, estoque_final in por_produto.items():
+            produto = Produto.objects.get(pk=produto_id)
+            self.assertGreaterEqual(estoque_final, 0)
+            self.assertEqual(int(produto.estoque), int(estoque_final))
+
+    def test_populate_dev_keeps_ficha_balances_consistent_with_ledger(self):
+        for ficha in Ficha.objects.all():
+            recargas = ficha.recargas.aggregate(total=Sum("valor"))["total"] or Decimal("0.00")
+            vendas = ficha.compras.aggregate(total=Sum("valor_total"))["total"] or Decimal("0.00")
+            self.assertEqual(ficha.saldo, recargas - vendas)
+
+    def test_populate_dev_marks_food_and_drinks_as_perishable(self):
+        self.assertGreater(Produto.objects.filter(perecivel=True).count(), 0)
+        self.assertTrue(
+            Produto.objects.filter(
+                perecivel=True,
+                categoria__in=["bebidas", "salgados", "doces"],
+            ).exists()
+        )
+        self.assertFalse(
+            Produto.objects.filter(categoria="jogos", perecivel=True).exists()
+        )
+
+    def test_populate_dev_dashboard_uses_operational_history(self):
+        response = self.client.get("/dashboard/data/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["metadadosModeloDemanda"]["fonteDados"], "operacional")
+        self.assertTrue(data["metadadosModeloDemanda"]["validacaoReal"])
+        self.assertEqual(data["metadadosModeloDemanda"]["avaliacao"]["eventos_treino"], 3)
+        self.assertEqual(data["metadadosModeloDemanda"]["avaliacao"]["eventos_holdout"], 2)
+        self.assertGreater(len(data["previsaoDemandaProdutos"]), 0)
+        self.assertGreater(len(data["produtosEstoquePrevisao"]), 0)
+        self.assertGreater(data["totalVendas"], 0)
+
+    def test_populate_dev_reset_is_idempotent(self):
+        total_vendas = Venda.objects.count()
+
+        call_command("populate_dev", "--reset", "--history-days", "15", verbosity=0)
+
+        self.assertEqual(Venda.objects.count(), total_vendas)
+        self.assertGreaterEqual(Venda.objects.count(), 300)

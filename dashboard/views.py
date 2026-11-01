@@ -10,7 +10,10 @@ from dashboard.predictions import (
     predict_revenue,
     predict_stock_needs,
 )
-from dashboard.synthetic_forecasting import predict_product_demand
+from dashboard.synthetic_forecasting import (
+    build_operational_history,
+    predict_product_demand,
+)
 from movimentacao.models import Produto, ReservaProduto, Venda
 
 @api_view(['GET'])
@@ -124,7 +127,9 @@ def dashboard_data(request):
         )
     }
     previsao_demanda_produtos, metadados_modelo = predict_product_demand(
-        Produto.objects.filter(perecivel=True), reservas_ativas
+        Produto.objects.filter(perecivel=True),
+        reservas_ativas,
+        history=build_operational_history(vendas_list_for_prediction),
     )
     
     # 7. Horários de pico (identificação simples)
