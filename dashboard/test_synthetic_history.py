@@ -9,6 +9,7 @@ from dashboard.synthetic_history import (
     CATEGORIES,
     EVENT_DAYS,
     EVENT_HOURS,
+    EVENT_WINDOW,
     SCHEMA_FIELDS,
     build_synthetic_fixture,
     generate_synthetic_event_history,
@@ -28,6 +29,27 @@ class TestSyntheticHistory(unittest.TestCase):
             "synthetic-event-03",
             "synthetic-event-04",
         })
+
+    def test_metadata_documents_schema_window_and_holdout_contract(self):
+        fixture = build_synthetic_fixture(seed=7, event_count=4)
+        metadata = fixture["metadata"]
+
+        self.assertEqual(metadata["seed"], 7)
+        self.assertEqual(metadata["event_window"], EVENT_WINDOW)
+        self.assertEqual(metadata["schema"], list(SCHEMA_FIELDS))
+        self.assertEqual(metadata["evaluation"]["holdout_unit"], "event_id")
+        self.assertIn("not observations from the partner school", metadata["source"])
+
+    def test_event_count_requires_a_holdout_and_rows_respect_stock(self):
+        with self.assertRaises(ValueError):
+            generate_synthetic_event_history(event_count=2)
+
+        rows = generate_synthetic_event_history(seed=7, event_count=4)
+        self.assertTrue(all(set(row) == set(SCHEMA_FIELDS) for row in rows))
+        self.assertTrue(all(
+            0 <= row["sales_units"] <= row["stock_available"] <= row["stock"]
+            for row in rows
+        ))
 
     def test_history_has_sane_dimensions_values_and_categories(self):
         rows = generate_synthetic_event_history(seed=7, event_count=4)
@@ -72,6 +94,10 @@ class TestSyntheticHistory(unittest.TestCase):
             sales_by_hour[row["hour"]].append(row["sales_units"])
 
         self.assertGreater(sales_by_category["salgados"], sales_by_category["doces"])
+        self.assertGreater(
+            sales_by_category["salgados"], sales_by_category["comidas_tipicas"]
+        )
+        self.assertGreater(sales_by_category["bebidas"], sales_by_category["doces"])
         self.assertGreater(
             sales_by_category["bebidas"], sales_by_category["comidas_tipicas"]
         )
