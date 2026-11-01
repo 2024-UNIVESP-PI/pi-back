@@ -122,3 +122,26 @@ python manage.py collectstatic --noinput
 ```
 
 Then reload the web app from the **Web** tab.
+
+## GitHub Actions deployment
+
+The backend workflow updates this checkout over SSH, runs migrations and
+`collectstatic`, then reloads the web app through the PythonAnywhere API.
+PythonAnywhere documents SSH access for paid accounts; on a free account this
+workflow cannot run the remote maintenance commands.
+
+1. Generate a dedicated deployment key locally:
+
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/pi-back-github-actions -C "pi-back-github-actions"
+   ```
+
+2. Add the public key (`.pub`) to `~/.ssh/authorized_keys` on PythonAnywhere.
+3. Add the private key contents as the GitHub Actions secret
+   `PYTHONANYWHERE_SSH_PRIVATE_KEY` in the `pi-back` repository.
+4. Keep the existing `PYTHONANYWHERE_API_TOKEN`, `PYTHONANYWHERE_HOST`,
+   `PYTHONANYWHERE_USERNAME` and `PYTHONANYWHERE_DOMAIN` secrets.
+
+The remote checkout must already exist at `/home/<username>/pi-back`, with the
+`pi-back` virtualenv configured as shown above. The workflow deploys only from
+`main` or from a manual `workflow_dispatch` run.
