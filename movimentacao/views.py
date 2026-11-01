@@ -8,6 +8,7 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.db import transaction
 from django.conf import settings
+from django.core.management import call_command
 from decimal import Decimal
 from .models import Caixa, Ficha, Produto, MovimentacaoEstoque, Venda, ReservaProduto, Recarga
 from .serializers import (
@@ -80,6 +81,20 @@ def admin_login(request):
         )
 
     return Response({"is_admin": True}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def seed_demo(request):
+    """Recreate demo data only when explicitly authorized by deployment automation."""
+    token = request.headers.get('X-Demo-Seed-Token', '')
+    if not settings.DEMO_SEED_TOKEN or not constant_time_compare(
+        token, settings.DEMO_SEED_TOKEN
+    ):
+        return Response({"detail": "Não autorizado."}, status=status.HTTP_403_FORBIDDEN)
+
+    history_days = max(1, int(request.data.get('history_days', 15)))
+    call_command('populate_dev', reset=True, history_days=history_days, verbosity=0)
+    return Response({"seeded": True, "history_days": history_days})
 
 
 @api_view(['GET'])

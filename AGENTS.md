@@ -43,6 +43,10 @@ python manage.py test --verbosity=2
 python manage.py makemigrations
 ```
 
+The GitHub Actions deploy workflow has an optional `seed_demo` manual input. Enable it
+only for the demo environment; it calls `POST /movimentacao/seed-demo/` with the
+`PYTHONANYWHERE_DEMO_SEED_TOKEN` secret and recreates the 15-day dataset.
+
 There is no pytest setup — Django's built-in test runner is used (`python manage.py test`).
 
 The frontend is NOT part of this repo; work on it in `/Users/motokiyo/pi-web`.
