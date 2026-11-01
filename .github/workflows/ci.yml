@@ -70,6 +70,9 @@ jobs:
           set -euo pipefail
           before="${{ github.event.before }}"
           if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="$(git rev-parse "$GITHUB_SHA^1" 2>/dev/null || true)"
+          fi
+          if [[ -z "$before" ]]; then
             before="$(git rev-list --max-parents=0 HEAD)"
           fi
           changed_files="$(git diff --name-only "$before" "$GITHUB_SHA")"
@@ -84,6 +87,9 @@ jobs:
           set -euo pipefail
           before="${{ github.event.before }}"
           if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="$(git rev-parse "$GITHUB_SHA^1" 2>/dev/null || true)"
+          fi
+          if [[ -z "$before" ]]; then
             before="$(git rev-list --max-parents=0 HEAD)"
           fi
           api_root="https://$PYTHONANYWHERE_HOST/api/v0/user/$PYTHONANYWHERE_USERNAME"
