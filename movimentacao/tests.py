@@ -392,3 +392,21 @@ class TestPopulateDevCommand(TestCase):
 
         self.assertEqual(Venda.objects.count(), total_vendas)
         self.assertGreaterEqual(Venda.objects.count(), 300)
+
+
+class TestDemoSeedEndpoint(TestCase):
+    @override_settings(DEMO_SEED_TOKEN="seed-token")
+    def test_seed_demo_requires_token(self):
+        response = self.client.post("/movimentacao/seed-demo/", {"history_days": 1})
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(DEMO_SEED_TOKEN="seed-token")
+    def test_seed_demo_recreates_data_with_token(self):
+        response = self.client.post(
+            "/movimentacao/seed-demo/",
+            {"history_days": 1},
+            HTTP_X_DEMO_SEED_TOKEN="seed-token",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["history_days"], 1)
+        self.assertGreaterEqual(Venda.objects.count(), 6)

@@ -45,6 +45,9 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 
+# Optional token for the explicit demo-data seed workflow.
+DEMO_SEED_TOKEN = os.getenv('DEMO_SEED_TOKEN', '')
+
 # Allow every origin only in local DEBUG mode unless explicitly overridden.
 CORS_ALLOW_ALL_ORIGINS = os.getenv(
     'CORS_ALLOW_ALL_ORIGINS',

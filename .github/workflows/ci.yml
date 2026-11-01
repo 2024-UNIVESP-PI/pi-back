@@ -5,6 +5,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      seed_demo:
+        description: "Recreate the demo database after deploying"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -40,6 +46,7 @@ jobs:
       PYTHONANYWHERE_DOMAIN: ${{ secrets.PYTHONANYWHERE_DOMAIN }}
       PYTHONANYWHERE_HOST: ${{ secrets.PYTHONANYWHERE_HOST }}
       PYTHONANYWHERE_USERNAME: ${{ secrets.PYTHONANYWHERE_USERNAME }}
+      PYTHONANYWHERE_DEMO_SEED_TOKEN: ${{ secrets.PYTHONANYWHERE_DEMO_SEED_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -129,3 +136,19 @@ jobs:
             -X POST \
             -H "Authorization: Token $PYTHONANYWHERE_API_TOKEN" \
             "https://$PYTHONANYWHERE_HOST/api/v0/user/$PYTHONANYWHERE_USERNAME/webapps/$PYTHONANYWHERE_DOMAIN/reload/"
+
+      - name: Seed demo database
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.seed_demo == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${PYTHONANYWHERE_DEMO_SEED_TOKEN:-}" ]]; then
+            echo "Missing GitHub secret: PYTHONANYWHERE_DEMO_SEED_TOKEN" >&2
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Demo-Seed-Token: $PYTHONANYWHERE_DEMO_SEED_TOKEN" \
+            --data '{"history_days":15}' \
+            "https://$PYTHONANYWHERE_DOMAIN/movimentacao/seed-demo/"
