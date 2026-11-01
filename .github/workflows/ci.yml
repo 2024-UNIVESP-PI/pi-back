@@ -4,6 +4,7 @@ on:
   push:
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -25,3 +26,106 @@ jobs:
 
       - name: Run tests
         run: python manage.py test --verbosity=2
+
+  deploy:
+    name: Deploy files to PythonAnywhere
+    needs: test
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PYTHONANYWHERE_API_TOKEN: ${{ secrets.PYTHONANYWHERE_API_TOKEN }}
+      PYTHONANYWHERE_DOMAIN: ${{ secrets.PYTHONANYWHERE_DOMAIN }}
+      PYTHONANYWHERE_HOST: ${{ secrets.PYTHONANYWHERE_HOST }}
+      PYTHONANYWHERE_USERNAME: ${{ secrets.PYTHONANYWHERE_USERNAME }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in PYTHONANYWHERE_API_TOKEN PYTHONANYWHERE_DOMAIN PYTHONANYWHERE_HOST PYTHONANYWHERE_USERNAME; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing GitHub secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Check for unsupported automatic maintenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="$(git rev-list --max-parents=0 HEAD)"
+          fi
+          changed_files="$(git diff --name-only "$before" "$GITHUB_SHA")"
+          if grep -Eq '(^|/)(requirements\.txt|.*\/migrations\/)' <<<"$changed_files"; then
+            echo "requirements.txt or migrations changed. Run pip install/migrate manually on PythonAnywhere before deploying." >&2
+            exit 1
+          fi
+
+      - name: Upload changed files through PythonAnywhere API
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="$(git rev-list --max-parents=0 HEAD)"
+          fi
+          api_root="https://$PYTHONANYWHERE_HOST/api/v0/user/$PYTHONANYWHERE_USERNAME"
+          remote_root="/home/$PYTHONANYWHERE_USERNAME/pi-back"
+
+          upload() {
+            local path="$1"
+            case "$path" in
+              .github/*|.git*|.sdd/*|templates/*|*.tsbuildinfo) return 0 ;;
+            esac
+            local encoded
+            encoded="$(python -c 'from urllib.parse import quote; import sys; print(quote(sys.argv[1], safe="/"))' "$remote_root/$path")"
+            curl --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Authorization: Token $PYTHONANYWHERE_API_TOKEN" \
+              -F "content=@$path" \
+              "$api_root/files/path$encoded"
+            sleep 1.6
+          }
+
+          remove() {
+            local path="$1"
+            case "$path" in
+              .github/*|.git*|.sdd/*|templates/*|*.tsbuildinfo) return 0 ;;
+            esac
+            local encoded
+            encoded="$(python -c 'from urllib.parse import quote; import sys; print(quote(sys.argv[1], safe="/"))' "$remote_root/$path")"
+            curl --fail-with-body --silent --show-error \
+              -X DELETE \
+              -H "Authorization: Token $PYTHONANYWHERE_API_TOKEN" \
+              "$api_root/files/path$encoded"
+            sleep 1.6
+          }
+
+          while IFS=$'\t' read -r status first second; do
+            [[ -z "$status" ]] && continue
+            case "$status" in
+              A|M|T) upload "$first" ;;
+              D) remove "$first" ;;
+              R*) remove "$first"; upload "$second" ;;
+              *) echo "Unsupported git change status: $status" >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-status --find-renames "$before" "$GITHUB_SHA")
+
+      - name: Reload PythonAnywhere web app
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Token $PYTHONANYWHERE_API_TOKEN" \
+            "https://$PYTHONANYWHERE_HOST/api/v0/user/$PYTHONANYWHERE_USERNAME/webapps/$PYTHONANYWHERE_DOMAIN/reload/"
