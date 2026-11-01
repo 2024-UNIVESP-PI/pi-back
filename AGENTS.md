@@ -28,7 +28,7 @@ API contract in sync with that repo — see [Web counterpart](#web-counterpart-p
 - `publico/` – public suggestions app (currently not mounted in the root URLconf; legacy)
 - `templates/` – operational/orchestration templates (Bernstein artifacts) — do not hand-edit casually
 - `dashboard/fixtures/synthetic_event_history.json` – synthetic festa junina event history fixture
-- `movimentacao/management/commands/populate_dev.py` – demo-data command (`--reset`)
+- `movimentacao/management/commands/populate_dev.py` – demo-data command (`--reset`, `--history-days 15`)
 - `venv/`, `db.sqlite3`, `static/`, `build_files.sh`, `PYTHONANYWHERE_SETUP.md`
 
 ## Commands
@@ -38,7 +38,7 @@ Run from the repository root with the virtualenv active:
 ```bash
 python manage.py runserver
 python manage.py migrate
-python manage.py populate_dev --reset   # demo data for the festa junina scenario
+python manage.py populate_dev --reset --history-days 15   # demo data for the festa junina scenario (15 days of history)
 python manage.py test --verbosity=2
 python manage.py makemigrations
 ```
@@ -78,6 +78,10 @@ Root URLconf mounts: `movimentacao/`, `dashboard/`, `admin/`.
 `GET` returns dashboard aggregates: totals, ticket average, sales per hour/category, top products,
 sales details, ML predictions (`predicaoDemanda`, `previsaoDemandaProdutos`, `predicaoReceita3Dias`,
 `produtosEstoquePrevisao`, `produtosRiscoEstoque`, `horariosPico`, `tendenciaVendas`, `confiancaPredicoes`, `reservas`).
+
+Predictions come from the operational sales history when at least three complete event days are
+available (e.g. after `populate_dev --history-days 15`); otherwise they fall back to the synthetic
+event history (`dashboard/fixtures/synthetic_event_history.json`, five events, holdout by event).
 
 ### `/admin/`
 

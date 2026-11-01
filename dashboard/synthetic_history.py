@@ -15,7 +15,11 @@ DEFAULT_SEED = 20240624
 EVENT_DAYS = (1, 2, 3)
 EVENT_HOURS = (16, 17, 18, 19, 20, 21, 22)
 CATEGORIES = ("bebidas", "salgados", "doces", "comidas_tipicas")
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
+MIN_EVENTS = 3
+
+EVENTS_DEFAULT_COUNT = 5
+HOLDOUT_EVENT_COUNT = 2
 
 HOUR_FACTORS = {
     16: 0.25,
@@ -120,7 +124,7 @@ def history_metadata(seed: int, event_count: int) -> dict[str, Any]:
 
 def generate_synthetic_event_history(
     seed: int = DEFAULT_SEED,
-    event_count: int = 4,
+    event_count: int = EVENTS_DEFAULT_COUNT,
 ) -> list[dict[str, Any]]:
     """Generate complete, reproducible event/product/day/hour observations.
 
@@ -132,7 +136,7 @@ def generate_synthetic_event_history(
         ValueError: If fewer than three events are requested, preventing a
             meaningful event-level holdout.
     """
-    if event_count < 3:
+    if event_count < MIN_EVENTS:
         raise ValueError("At least three events are required for event-level holdout.")
 
     rng = random.Random(seed)
@@ -203,7 +207,7 @@ def generate_synthetic_event_history(
 
 def build_synthetic_fixture(
     seed: int = DEFAULT_SEED,
-    event_count: int = 3,
+    event_count: int = EVENTS_DEFAULT_COUNT,
 ) -> dict[str, Any]:
     """Return the checked-in fixture shape with metadata and generated rows."""
     return {

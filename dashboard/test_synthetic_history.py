@@ -17,20 +17,21 @@ from dashboard.synthetic_history import (
 
 class TestSyntheticHistory(unittest.TestCase):
     def test_history_is_repeatable_and_complete(self):
-        first = generate_synthetic_event_history(seed=7, event_count=4)
-        second = generate_synthetic_event_history(seed=7, event_count=4)
+        first = generate_synthetic_event_history(seed=7, event_count=5)
+        second = generate_synthetic_event_history(seed=7, event_count=5)
 
         self.assertEqual(first, second)
-        self.assertEqual(len(first), 4 * 4 * len(EVENT_DAYS) * len(EVENT_HOURS))
+        self.assertEqual(len(first), 5 * 4 * len(EVENT_DAYS) * len(EVENT_HOURS))
         self.assertEqual({row["event_id"] for row in first}, {
             "synthetic-event-01",
             "synthetic-event-02",
             "synthetic-event-03",
             "synthetic-event-04",
+            "synthetic-event-05",
         })
 
     def test_history_has_sane_dimensions_values_and_categories(self):
-        rows = generate_synthetic_event_history(seed=7, event_count=4)
+        rows = generate_synthetic_event_history(seed=7, event_count=5)
         self.assertEqual({row["category"] for row in rows}, set(CATEGORIES))
         self.assertTrue(all(set(SCHEMA_FIELDS) <= row.keys() for row in rows))
         self.assertTrue(all(
@@ -95,4 +96,6 @@ class TestSyntheticHistory(unittest.TestCase):
 
         self.assertEqual(fixture, expected)
         self.assertEqual(fixture["metadata"]["evaluation"]["holdout_unit"], "event_id")
-        self.assertIn("partner school", fixture["metadata"]["source"])
+        self.assertEqual(fixture["metadata"]["event_count"], 5)
+        self.assertEqual(fixture["metadata"]["schema_version"], "1.1")
+        self.assertEqual(fixture["metadata"]["evaluation"]["holdout_ready"], True)
