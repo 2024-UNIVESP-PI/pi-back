@@ -125,23 +125,32 @@ Then reload the web app from the **Web** tab.
 
 ## GitHub Actions deployment
 
-The backend workflow updates this checkout over SSH, runs migrations and
-`collectstatic`, then reloads the web app through the PythonAnywhere API.
-PythonAnywhere documents SSH access for paid accounts; on a free account this
-workflow cannot run the remote maintenance commands.
+The backend workflow uses the PythonAnywhere API to upload changed files and
+reload the web app. This works on the free plan and does not require an SSH
+key. Keep these GitHub Actions secrets configured:
 
-1. Generate a dedicated deployment key locally:
-
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/pi-back-github-actions -C "pi-back-github-actions"
-   ```
-
-2. Add the public key (`.pub`) to `~/.ssh/authorized_keys` on PythonAnywhere.
-3. Add the private key contents as the GitHub Actions secret
-   `PYTHONANYWHERE_SSH_PRIVATE_KEY` in the `pi-back` repository.
-4. Keep the existing `PYTHONANYWHERE_API_TOKEN`, `PYTHONANYWHERE_HOST`,
-   `PYTHONANYWHERE_USERNAME` and `PYTHONANYWHERE_DOMAIN` secrets.
+```text
+PYTHONANYWHERE_API_TOKEN
+PYTHONANYWHERE_DOMAIN
+PYTHONANYWHERE_HOST
+PYTHONANYWHERE_USERNAME
+```
 
 The remote checkout must already exist at `/home/<username>/pi-back`, with the
 `pi-back` virtualenv configured as shown above. The workflow deploys only from
 `main` or from a manual `workflow_dispatch` run.
+
+The free plan workflow intentionally stops when `requirements.txt` or a
+migration changes, because those maintenance commands cannot be run through
+the file API. Run them manually in a PythonAnywhere console, then rerun the
+workflow:
+
+```bash
+cd ~/pi-back
+workon pi-back
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py collectstatic --noinput
+```
+
+Finally, reload the web app from the **Web** tab.
