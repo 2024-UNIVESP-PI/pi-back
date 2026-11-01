@@ -6,6 +6,7 @@ from dashboard.synthetic_forecasting import (
     generate_synthetic_event_history,
     predict_product_demand,
     synthetic_forecast_metadata,
+    train_event_forecast,
 )
 from movimentacao.models import Caixa, Ficha, MovimentacaoEstoque, Produto, Venda
 
@@ -81,6 +82,9 @@ class TestDashboardData(TestCase):
         self.assertIn("confianca", data["produtosEstoquePrevisao"][0])
         self.assertEqual(data["metadadosModeloDemanda"]["fonteDados"], "sintetica")
         self.assertIn("sintéticos", data["metadadosModeloDemanda"]["aviso"])
+        self.assertFalse(data["metadadosModeloDemanda"]["validacaoReal"])
+        self.assertIn("mae_holdout", data["metadadosModeloDemanda"]["avaliacao"])
+        self.assertIn("mae_baseline", data["metadadosModeloDemanda"]["avaliacao"])
         self.assertGreater(len(data["previsaoDemandaProdutos"]), 0)
 
 
@@ -101,11 +105,33 @@ class TestSyntheticForecast(TestCase):
         metadata = synthetic_forecast_metadata()
 
         self.assertEqual(metadata["fonteDados"], "sintetica")
+        self.assertFalse(metadata["validacaoReal"])
         self.assertEqual(metadata["avaliacao"]["eventos_holdout"], 2)
         self.assertEqual(
             metadata["avaliacao"]["particao"],
             "eventos completos mantidos fora do treino",
         )
+        self.assertIn("não validadas em eventos reais", metadata["aviso"])
+
+    def test_real_history_uses_event_split_and_baseline_comparison(self):
+        history = generate_synthetic_event_history(seed=7, event_count=4)
+
+        _, metadata = train_event_forecast(history, source="escola_anonimizada")
+
+        self.assertEqual(metadata["fonteDados"], "escola_anonimizada")
+        self.assertTrue(metadata["validacaoReal"])
+        self.assertEqual(metadata["avaliacao"]["eventos_treino"], 2)
+        self.assertEqual(metadata["avaliacao"]["eventos_holdout"], 2)
+        self.assertIsInstance(metadata["avaliacao"]["mae_holdout"], float)
+        self.assertIsInstance(metadata["avaliacao"]["mae_baseline"], float)
+
+    def test_sparse_history_falls_back_to_unvalidated_synthetic_model(self):
+        history = generate_synthetic_event_history(seed=7, event_count=3)
+
+        _, metadata = train_event_forecast(history[:10])
+
+        self.assertEqual(metadata["fonteDados"], "sintetica")
+        self.assertFalse(metadata["validacaoReal"])
         self.assertIn("não validadas em eventos reais", metadata["aviso"])
 
     def test_product_forecast_is_nonnegative_and_accounts_for_reservations(self):
