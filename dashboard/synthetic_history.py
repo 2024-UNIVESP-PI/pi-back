@@ -14,7 +14,6 @@ from typing import Any
 DEFAULT_SEED = 20240624
 EVENT_DAYS = (1, 2, 3)
 EVENT_HOURS = (16, 17, 18, 19, 20, 21, 22)
-EVENT_WINDOW = "16:00-22:00"
 CATEGORIES = ("bebidas", "salgados", "doces", "comidas_tipicas")
 SCHEMA_VERSION = "1.0"
 
@@ -74,7 +73,6 @@ def history_metadata(seed: int, event_count: int) -> dict[str, Any]:
         "seed": seed,
         "event_count": event_count,
         "event_days": len(EVENT_DAYS),
-        "event_window": EVENT_WINDOW,
         "hours": [f"{hour:02d}:00-{hour + 1:02d}:00" for hour in EVENT_HOURS],
         "source": (
             "Simulated priors inspired by common festa junina buying patterns; "
