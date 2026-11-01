@@ -1,74 +1,22 @@
 """Small, deterministic forecast prototype trained only on synthetic events."""
 
-import random
 from functools import lru_cache
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
+
+from dashboard.synthetic_history import (
+    CATEGORIES as HISTORY_CATEGORIES,
+    EVENT_HOURS,
+    generate_synthetic_event_history,
+)
 
 
 SYNTHETIC_SOURCE_LABEL = (
     "Dados sintéticos de demonstração; previsões não validadas em eventos reais."
 )
 EVENT_DAYS = 3
-EVENT_HOURS = (16, 17, 18, 19, 20, 21, 22)
-CATEGORIES = ("bebidas", "doces", "jogos", "salgados")
-PRODUCT_PROFILES = (
-    {"category": "bebidas", "price": 4.0, "base": 35, "reservation_rate": 0.18, "purchase_rate": 0.42},
-    {"category": "doces", "price": 5.0, "base": 24, "reservation_rate": 0.24, "purchase_rate": 0.31},
-    {"category": "jogos", "price": 4.0, "base": 20, "reservation_rate": 0.08, "purchase_rate": 0.22},
-    {"category": "salgados", "price": 8.0, "base": 38, "reservation_rate": 0.30, "purchase_rate": 0.48},
-)
-HOUR_FACTORS = {16: 0.18, 17: 0.38, 18: 0.82, 19: 1.15, 20: 1.28, 21: 0.95, 22: 0.52}
-DAY_FACTORS = {1: 0.82, 2: 1.0, 3: 0.91}
-
-
-def generate_synthetic_event_history(seed=42, event_count=10):
-    """Return reproducible event/product/hour observations; no people are generated."""
-    if event_count < 3:
-        raise ValueError("At least three events are required for event-level holdout.")
-
-    rng = random.Random(seed)
-    rows = []
-    for event_number in range(event_count):
-        event_id = f"synthetic-event-{event_number + 1:02d}"
-        attendance_factor = (
-            0.78 + (event_number / max(event_count - 1, 1)) * 0.42 + rng.uniform(-0.08, 0.08)
-        )
-
-        for product_number, profile in enumerate(PRODUCT_PROFILES):
-            reservations = max(
-                0,
-                round(22 * attendance_factor * profile["reservation_rate"] / 0.2)
-                + rng.randint(-2, 2),
-            )
-            fichas = max(
-                1,
-                round(100 * attendance_factor * profile["purchase_rate"])
-                + rng.randint(-4, 4),
-            )
-
-            for event_day, day_factor in DAY_FACTORS.items():
-                for hour in EVENT_HOURS:
-                    expected = (
-                        profile["base"] * attendance_factor * day_factor * HOUR_FACTORS[hour]
-                        + reservations * 0.08 * HOUR_FACTORS[hour]
-                        + fichas * 0.006 * HOUR_FACTORS[hour]
-                    )
-                    sold = max(0, round(expected + rng.gauss(0, max(0.5, expected * 0.1))))
-                    rows.append({
-                        "event_id": event_id,
-                        "product_number": product_number,
-                        "category": profile["category"],
-                        "price": profile["price"],
-                        "event_day": event_day,
-                        "hour": hour,
-                        "reservations": reservations,
-                        "fichas": fichas,
-                        "sales_units": sold,
-                    })
-
-    return rows
+CATEGORIES = (*HISTORY_CATEGORIES, "jogos")
 
 
 def _features(category, price, event_day, hour, reservations, fichas):
@@ -115,7 +63,10 @@ def _trained_model():
     baseline_prediction = [sum(train_y) / len(train_y)] * len(holdout_y)
 
     model = RandomForestRegressor(**parameters)
-    model.fit([_row_features(row) for row in rows], [row["sales_units"] for row in rows])
+    model.fit(
+        [_row_features(row) for row in rows],
+        [row["sales_units"] for row in rows],
+    )
     evaluation = {
         "metrica": "MAE em unidades por faixa horária",
         "mae_holdout": round(mean_absolute_error(holdout_y, holdout_prediction), 2),
