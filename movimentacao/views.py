@@ -457,9 +457,18 @@ class ReservaProdutoViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def confirmar(self, request, pk=None):
         """Confirma reserva e converte em venda"""
-        reserva = self.get_object()
+        reserva = ReservaProduto.objects.select_for_update().select_related('produto').get(pk=pk)
         if reserva.status != 'pendente':
             return Response({'error': 'Reserva já processada'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if reserva.ficha_id is None:
+            return Response(
+                {'error': 'A reserva precisa estar vinculada a uma ficha antes da confirmação'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reserva.ficha = Ficha.objects.select_for_update().get(pk=reserva.ficha_id)
+        reserva.produto = Produto.objects.select_for_update().get(pk=reserva.produto_id)
         
         # Valida saldo e estoque
         preco_total = reserva.produto.preco * reserva.quantidade

@@ -179,11 +179,15 @@ class ReservaPublicaSerializer(serializers.Serializer):
     
     def validate_produtos(self, value):
         """Valida estrutura dos produtos"""
+        produto_ids = set()
         for produto_data in value:
             if 'produto_id' not in produto_data or 'quantidade' not in produto_data:
                 raise serializers.ValidationError("Cada produto deve ter 'produto_id' e 'quantidade'")
             if produto_data['quantidade'] <= 0:
                 raise serializers.ValidationError("Quantidade deve ser maior que zero")
+            if produto_data['produto_id'] in produto_ids:
+                raise serializers.ValidationError("Cada produto deve aparecer apenas uma vez")
+            produto_ids.add(produto_data['produto_id'])
         return value
     
     def validate_cpf(self, value):
