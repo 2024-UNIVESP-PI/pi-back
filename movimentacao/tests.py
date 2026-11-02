@@ -3,9 +3,11 @@ from decimal import Decimal
 
 from django.contrib.auth.hashers import check_password
 from django.core.exceptions import ValidationError
+from django.core import signing
 from django.core.management import call_command
 from django.db.models import Sum
 from django.test import TestCase, override_settings
+from unittest.mock import patch
 from django.utils import timezone
 
 from .models import (
@@ -20,6 +22,11 @@ from .models import (
 )
 from .serializers import VendaSerializer
 from publico.models import Sugestao
+from .authentication import TOKEN_SALT, SignedTokenAuthentication, create_access_token
+
+
+def authenticate_test_client(client, role="admin"):
+    client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {create_access_token('test', role)}"
 
 
 class TestEstoquePersistence(TestCase):
@@ -162,6 +169,9 @@ class TestEstoquePersistence(TestCase):
 
 
 class TestFichaPersistence(TestCase):
+    def setUp(self):
+        authenticate_test_client(self.client, "caixa")
+
     def test_recarga_action_uses_validated_decimal_value(self):
         caixa = Caixa.objects.create(
             nome="Caixa Principal",
@@ -215,7 +225,9 @@ class TestAuthenticationPersistence(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"is_admin": True})
+        self.assertEqual(response.json()["is_admin"], True)
+        self.assertEqual(response.json()["role"], "admin")
+        self.assertTrue(response.json()["token"])
 
     @override_settings(ADMIN_USERNAME="admin", ADMIN_PASSWORD="secret")
     def test_admin_login_rejects_invalid_credentials(self):
@@ -225,6 +237,72 @@ class TestAuthenticationPersistence(TestCase):
             content_type="application/json",
         )
 
+        self.assertEqual(response.status_code, 401)
+
+
+class TestSignedTokenAPI(TestCase):
+    def setUp(self):
+        self.caixa = Caixa.objects.create(
+            nome="Caixa Principal", usuario="caixa-auth", senha="123"
+        )
+
+    def login(self, usuario="admin", senha="secret"):
+        if usuario == "admin":
+            response = self.client.post(
+                "/movimentacao/admin-login/",
+                {"username": usuario, "password": senha},
+                content_type="application/json",
+            )
+        else:
+            response = self.client.post(
+                "/movimentacao/caixas/login/",
+                {"usuario": usuario, "senha": senha},
+                content_type="application/json",
+            )
+        return response.json()["token"]
+
+    @override_settings(ADMIN_USERNAME="admin", ADMIN_PASSWORD="secret")
+    def test_private_endpoint_rejects_anonymous_and_accepts_admin_token(self):
+        self.assertEqual(self.client.get("/movimentacao/produtos/").status_code, 401)
+        token = self.login()
+        response = self.client.get(
+            "/movimentacao/produtos/", HTTP_AUTHORIZATION=f"Bearer {token}"
+        )
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(ADMIN_USERNAME="admin", ADMIN_PASSWORD="secret")
+    def test_admin_only_endpoint_rejects_caixa_token(self):
+        token = self.login("caixa-auth", "123")
+        response = self.client.get(
+            "/movimentacao/produtos/", HTTP_AUTHORIZATION=f"Bearer {token}"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_caixa_can_retrieve_only_own_record(self):
+        token = self.login("caixa-auth", "123")
+        response = self.client.get(
+            f"/movimentacao/caixas/{self.caixa.id}/",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        other = Caixa.objects.create(nome="Outro", usuario="outro", senha="123")
+        response = self.client.get(
+            f"/movimentacao/caixas/{other.id}/",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(ADMIN_USERNAME="admin", ADMIN_PASSWORD="secret")
+    def test_expired_token_is_rejected(self):
+        token = signing.dumps({"sub": "admin", "role": "admin"}, salt=TOKEN_SALT)
+        # A token with a timestamp older than the configured lifetime is invalid.
+        with patch(
+            "movimentacao.authentication.TOKEN_MAX_AGE", 0
+        ):
+            response = self.client.get(
+                "/movimentacao/produtos/", HTTP_AUTHORIZATION=f"Bearer {token}"
+            )
         self.assertEqual(response.status_code, 401)
 
 
@@ -259,6 +337,7 @@ class TestQRCodeReservationFlow(TestCase):
             ativo=True,
         )
         self.qr_code.produtos_disponiveis.set([self.produto_permitido])
+        authenticate_test_client(self.client, "caixa")
 
     def test_public_products_returns_availability_for_qr_products_only(self):
         response = self.client.get(
@@ -397,6 +476,7 @@ class TestQRCodeReservationFlow(TestCase):
 class TestPopulateDevCommand(TestCase):
     def setUp(self):
         call_command("populate_dev", "--reset", "--history-days", "15", verbosity=0)
+        authenticate_test_client(self.client, "admin")
 
 
     def test_populate_dev_generates_fifteen_days_of_sales_with_minimum_volume(self):

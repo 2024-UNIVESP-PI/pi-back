@@ -1,5 +1,6 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action, api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from django.utils.crypto import constant_time_compare
@@ -10,6 +11,8 @@ from django.db import transaction
 from django.conf import settings
 from django.core.management import call_command
 from decimal import Decimal
+from .authentication import SignedTokenAuthentication, create_access_token
+from .permissions import IsAdmin, IsCaixaOrAdmin
 from .models import Caixa, Ficha, Produto, MovimentacaoEstoque, Venda, ReservaProduto, Recarga
 from .serializers import (
     CaixaSerializer,
@@ -24,6 +27,20 @@ from .serializers import (
 class CaixaViewSet(viewsets.ModelViewSet):
     queryset = Caixa.objects.all()
     serializer_class = CaixaSerializer
+    authentication_classes = [SignedTokenAuthentication]
+    permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        if getattr(self.request.user, "role", None) == "caixa":
+            return self.queryset.filter(pk=getattr(self.request.user, "subject", None))
+        return self.queryset
+
+    def get_permissions(self):
+        if self.action == 'login':
+            return [AllowAny()]
+        if self.action == 'retrieve':
+            return [IsCaixaOrAdmin()]
+        return super().get_permissions()
     
     @action(detail=False, methods=['post'])
     def login(self, request):
@@ -44,7 +61,10 @@ class CaixaViewSet(viewsets.ModelViewSet):
                     caixa.set_senha(senha)
                     caixa.save(update_fields=['senha'])
                 serializer = CaixaSerializer(caixa)
-                return Response(serializer.data, status=status.HTTP_200_OK)
+                data = serializer.data
+                data['token'] = create_access_token(caixa.id, 'caixa')
+                data['role'] = 'caixa'
+                return Response(data, status=status.HTTP_200_OK)
             else:
                 return Response(
                     {"detail": "Usuário ou senha inválidos."},
@@ -58,6 +78,7 @@ class CaixaViewSet(viewsets.ModelViewSet):
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def admin_login(request):
     """Endpoint para login do administrador do sistema."""
     username = request.data.get('username') or request.data.get('usuario')
@@ -80,10 +101,11 @@ def admin_login(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
 
-    return Response({"is_admin": True}, status=status.HTTP_200_OK)
+    return Response({"is_admin": True, "role": "admin", "token": create_access_token(username, "admin")}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def seed_demo(request):
     """Recreate demo data only when explicitly authorized by deployment automation."""
     token = request.headers.get('X-Demo-Seed-Token', '')
@@ -98,6 +120,8 @@ def seed_demo(request):
 
 
 @api_view(['GET'])
+@authentication_classes([SignedTokenAuthentication])
+@permission_classes([IsAdmin])
 def movimentacoes_financeiras(request):
     """Retorna o extrato financeiro consolidado de recargas e vendas."""
     recargas = Recarga.objects.select_related('ficha', 'caixa', 'produto').order_by('-data')
@@ -164,6 +188,8 @@ def movimentacoes_financeiras(request):
 class FichaViewSet(viewsets.ModelViewSet):
     queryset = Ficha.objects.all().order_by('numero')
     # serializer_class = FichaSerializer
+    authentication_classes = [SignedTokenAuthentication]
+    permission_classes = [IsCaixaOrAdmin]
     
     def get_serializer_class(self):
         if self.action == 'recarga':
@@ -371,6 +397,8 @@ class ProdutoViewSet(viewsets.ModelViewSet):
     serializer_class = ProdutoSerializer
     filter_backends = [SearchFilter]
     search_fields = ['nome']
+    authentication_classes = [SignedTokenAuthentication]
+    permission_classes = [IsAdmin]
     
     def get_queryset(self):
         """Retorna todos os produtos, incluindo os sem estoque"""
@@ -380,15 +408,21 @@ class ProdutoViewSet(viewsets.ModelViewSet):
 class MovimentacaoEstoqueViewSet(viewsets.ModelViewSet):
     queryset = MovimentacaoEstoque.objects.all()
     serializer_class = MovimentacaoEstoqueSerializer
+    authentication_classes = [SignedTokenAuthentication]
+    permission_classes = [IsCaixaOrAdmin]
 
 class VendaViewSet(viewsets.ModelViewSet):
     queryset = Venda.objects.all()
     serializer_class = VendaSerializer
+    authentication_classes = [SignedTokenAuthentication]
+    permission_classes = [IsCaixaOrAdmin]
 
 
 class ReservaProdutoViewSet(viewsets.ModelViewSet):
     queryset = ReservaProduto.objects.all()
     serializer_class = ReservaProdutoSerializer
+    authentication_classes = [SignedTokenAuthentication]
+    permission_classes = [IsCaixaOrAdmin]
     
     def get_queryset(self):
         queryset = ReservaProduto.objects.all()

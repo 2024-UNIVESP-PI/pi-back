@@ -12,9 +12,13 @@ from dashboard.synthetic_forecasting import (
 )
 from dashboard.synthetic_history import EVENT_DAYS, EVENT_HOURS
 from movimentacao.models import Caixa, Ficha, MovimentacaoEstoque, Produto, Venda
+from movimentacao.authentication import create_access_token
 
 
 class TestDashboardData(TestCase):
+    def setUp(self):
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {create_access_token('test', 'admin')}"
+
     def criar_venda(self, produto, ficha, caixa, quantidade=1):
         movimentacao = MovimentacaoEstoque.objects.create(
             caixa=caixa,
@@ -134,6 +138,9 @@ class TestDashboardData(TestCase):
 
 
 class TestSyntheticForecast(TestCase):
+    def setUp(self):
+        self.client.defaults["HTTP_AUTHORIZATION"] = f"Bearer {create_access_token('test', 'admin')}"
+
     def test_history_is_repeatable_and_contains_no_personal_records(self):
         first = generate_synthetic_event_history(seed=7, event_count=5)
         second = generate_synthetic_event_history(seed=7, event_count=5)

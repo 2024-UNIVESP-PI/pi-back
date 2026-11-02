@@ -1,4 +1,7 @@
 from rest_framework.decorators import api_view
+from rest_framework.decorators import authentication_classes, permission_classes
+from movimentacao.authentication import SignedTokenAuthentication
+from movimentacao.permissions import IsAdmin
 from rest_framework.response import Response
 from django.db.models import Count, Sum
 from django.utils.timezone import localtime
@@ -17,6 +20,8 @@ from dashboard.synthetic_forecasting import (
 from movimentacao.models import Produto, ReservaProduto, Venda
 
 @api_view(['GET'])
+@authentication_classes([SignedTokenAuthentication])
+@permission_classes([IsAdmin])
 def dashboard_data(request):
     # Verificar se há vendas antes de processar
     vendas = Venda.objects.select_related(

@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.utils import timezone
@@ -21,10 +21,14 @@ from .serializers import (
     ReservaPublicaSerializer,
     ProdutoSerializer
 )
+from .authentication import SignedTokenAuthentication
+from .permissions import IsAdmin
 
 
 class QRCodeReservaViewSet(viewsets.ModelViewSet):
     serializer_class = QRCodeReservaSerializer
+    authentication_classes = [SignedTokenAuthentication]
+    permission_classes = [IsAdmin]
 
     def get_queryset(self):
         return QRCodeReserva.objects.prefetch_related(
@@ -659,6 +663,7 @@ def criar_reserva_publica(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def reservas_por_cpf(request):
     """Retorna reservas por CPF (para usuário verificar suas reservas)"""
     cpf = request.query_params.get('cpf')
