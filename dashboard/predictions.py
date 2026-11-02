@@ -162,9 +162,24 @@ def predict_stock_needs(vendas, days_window=7, safety_days=3):
 
 
 def build_reservation_insights():
+    current_time = now()
+    start_date = (current_time - timedelta(days=6)).date()
     total_reservas = ReservaProduto.objects.count()
     total_finalizadas = ReservaProduto.objects.filter(status='finalizada').count()
     total_pendentes = ReservaProduto.objects.filter(status='pendente', ficha__isnull=True).count()
+
+    pendentes_por_dia = {
+        item["data_reserva__date"]: item["total"]
+        for item in ReservaProduto.objects.filter(
+            status="pendente", data_reserva__date__gte=start_date
+        ).values("data_reserva__date").annotate(total=Count("id"))
+    }
+    finalizadas_por_dia = {
+        item["data_confirmacao__date"]: item["total"]
+        for item in ReservaProduto.objects.filter(
+            status="finalizada", data_confirmacao__date__gte=start_date
+        ).values("data_confirmacao__date").annotate(total=Count("id"))
+    }
 
     return {
         "total_pendentes": total_pendentes,
@@ -181,15 +196,13 @@ def build_reservation_insights():
         ],
         "tendencia_7dias": [
             {
-                "data": (now() - timedelta(days=i)).strftime("%d/%m"),
-                "pendentes": ReservaProduto.objects.filter(
-                    status='pendente',
-                    data_reserva__date=(now() - timedelta(days=i)).date()
-                ).count(),
-                "finalizadas": ReservaProduto.objects.filter(
-                    status='finalizada',
-                    data_confirmacao__date=(now() - timedelta(days=i)).date()
-                ).count()
+                "data": (current_time - timedelta(days=i)).strftime("%d/%m"),
+                "pendentes": pendentes_por_dia.get(
+                    (current_time - timedelta(days=i)).date(), 0
+                ),
+                "finalizadas": finalizadas_por_dia.get(
+                    (current_time - timedelta(days=i)).date(), 0
+                )
             }
             for i in range(6, -1, -1)
         ]

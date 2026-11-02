@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.utils import timezone
@@ -8,6 +8,7 @@ from django.http import HttpResponse
 from django.db import transaction
 from django.db.models import Sum
 from django.conf import settings
+from django.core import signing
 from datetime import timedelta
 import uuid
 import qrcode
@@ -21,10 +22,18 @@ from .serializers import (
     ReservaPublicaSerializer,
     ProdutoSerializer
 )
+from .authentication import SignedTokenAuthentication
+from .permissions import IsAdmin
+
+
+PUBLIC_RESERVATION_TOKEN_SALT = "movimentacao.reservas-publicas"
+PUBLIC_RESERVATION_TOKEN_MAX_AGE = 60 * 60 * 24
 
 
 class QRCodeReservaViewSet(viewsets.ModelViewSet):
     serializer_class = QRCodeReservaSerializer
+    authentication_classes = [SignedTokenAuthentication]
+    permission_classes = [IsAdmin]
 
     def get_queryset(self):
         return QRCodeReserva.objects.prefetch_related(
@@ -654,18 +663,43 @@ def criar_reserva_publica(request):
         'total': total_geral,
         'nome_completo': nome_completo,
         'cpf': cpf,
+        # This short-lived token is required to query these reservations later;
+        # CPF alone must not act as a credential.
+        'consulta_token': signing.dumps(
+            {'cpf': cpf}, salt=PUBLIC_RESERVATION_TOKEN_SALT
+        ),
         'data_reserva': timezone.now().isoformat()
     }, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def reservas_por_cpf(request):
-    """Retorna reservas por CPF (para usuário verificar suas reservas)"""
+    """Retorna reservas após validar o token entregue na criação."""
     cpf = request.query_params.get('cpf')
-    if not cpf:
+    consulta_token = request.query_params.get('consulta_token')
+    if not cpf or not consulta_token:
         return Response(
-            {'error': 'CPF não fornecido'},
-            status=status.HTTP_400_BAD_REQUEST
+            {'error': 'CPF e token de consulta são obrigatórios'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    try:
+        payload = signing.loads(
+            consulta_token,
+            salt=PUBLIC_RESERVATION_TOKEN_SALT,
+            max_age=PUBLIC_RESERVATION_TOKEN_MAX_AGE,
+        )
+    except (signing.BadSignature, signing.SignatureExpired, ValueError, TypeError):
+        return Response(
+            {'error': 'Token de consulta inválido ou expirado'},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if payload.get('cpf') != cpf:
+        return Response(
+            {'error': 'Token de consulta inválido'},
+            status=status.HTTP_401_UNAUTHORIZED,
         )
     
     reservas = ReservaProduto.objects.filter(cpf=cpf, status__in=['pendente', 'confirmada'])
