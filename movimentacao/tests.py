@@ -9,6 +9,7 @@ from django.db.models import Sum
 from django.test import TestCase, override_settings
 from unittest.mock import patch
 from django.utils import timezone
+from rest_framework.test import APITestCase
 
 from .models import (
     Caixa,
@@ -514,6 +515,131 @@ class TestQRCodeReservationFlow(TestCase):
         self.assertEqual(self.produto_permitido.estoque, 1)
         self.assertEqual(reserva.status, "pendente")
         self.assertEqual(Venda.objects.count(), 0)
+
+
+class TestCriticalWorkflowIntegration(APITestCase):
+    """Cobre o fluxo operacional completo com as mesmas requisições da API."""
+
+    def setUp(self):
+        self.caixa = Caixa.objects.create(
+            nome="Caixa do Fluxo", usuario="fluxo-caixa", senha="123"
+        )
+        self.produto = Produto.objects.create(
+            caixa=self.caixa,
+            nome="Canjica",
+            medida="UN",
+            preco=Decimal("6.00"),
+            disponivel_reserva=True,
+            limite_reserva=3,
+            quantidade_reserva_disponivel=3,
+        )
+        MovimentacaoEstoque.objects.create(
+            caixa=self.caixa, produto=self.produto, quantidade=2, tipo="E"
+        )
+        self.qr_code = QRCodeReserva.objects.create(
+            codigo="FLUXO-TESTE", descricao="Fluxo integrado", ativo=True
+        )
+        self.qr_code.produtos_disponiveis.add(self.produto)
+
+    def _login_caixa(self):
+        response = self.client.post(
+            "/movimentacao/caixas/login/",
+            {"usuario": "fluxo-caixa", "senha": "123"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['token']}")
+
+    def test_reservation_login_ficha_sale_and_lookup_flow(self):
+        self.assertEqual(self.client.get("/movimentacao/fichas/").status_code, 401)
+
+        products = self.client.get(
+            "/movimentacao/reservas-publicas/FLUXO-TESTE/produtos/"
+        )
+        self.assertEqual(products.status_code, 200)
+        self.assertEqual(products.data["produtos"][0]["disponivel"], 3)
+
+        created = self.client.post(
+            "/movimentacao/reservas-publicas/criar/",
+            {
+                "nome_completo": "Joana Silva",
+                "cpf": "32165498700",
+                "qr_code": "FLUXO-TESTE",
+                "produtos": [{"produto_id": self.produto.id, "quantidade": 1}],
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201)
+        consulta_token = created.data["consulta_token"]
+
+        lookup = self.client.get(
+            "/movimentacao/reservas-publicas/por-cpf/",
+            {"cpf": "32165498700", "consulta_token": consulta_token},
+        )
+        self.assertEqual(lookup.status_code, 200)
+        self.assertEqual(len(lookup.data["reservas"]), 1)
+
+        self._login_caixa()
+        ficha_response = self.client.post(
+            "/movimentacao/fichas/",
+            {
+                "numero": 700,
+                "saldo": "10.00",
+                "caixa_id": self.caixa.id,
+                "cpf_reserva": "32165498700",
+            },
+            format="json",
+        )
+        self.assertEqual(ficha_response.status_code, 201)
+
+        ficha = Ficha.objects.get(numero=700)
+        reserva = ReservaProduto.objects.get(cpf="32165498700")
+        self.assertEqual(ficha.saldo, Decimal("4.00"))
+        self.assertEqual(reserva.status, "finalizada")
+        self.assertEqual(Venda.objects.filter(ficha=ficha).count(), 1)
+        self.produto.refresh_from_db()
+        self.assertEqual(self.produto.estoque, 1)
+
+        recarga = self.client.post(
+            f"/movimentacao/fichas/{ficha.id}/recarga/",
+            {"valor": "2.50", "caixa_id": self.caixa.id},
+            format="json",
+        )
+        self.assertEqual(recarga.status_code, 200)
+        ficha.refresh_from_db()
+        self.assertEqual(ficha.saldo, Decimal("6.50"))
+
+    def test_ficha_creation_rolls_back_when_reservation_has_no_stock(self):
+        self._login_caixa()
+        self.produto.estoque = 0
+        self.produto.save(update_fields=["estoque"])
+        self.client.post(
+            "/movimentacao/reservas-publicas/criar/",
+            {
+                "nome_completo": "Carlos Lima",
+                "cpf": "11122233344",
+                "qr_code": "FLUXO-TESTE",
+                "produtos": [{"produto_id": self.produto.id, "quantidade": 1}],
+            },
+            format="json",
+        )
+
+        response = self.client.post(
+            "/movimentacao/fichas/",
+            {
+                "numero": 701,
+                "saldo": "10.00",
+                "caixa_id": self.caixa.id,
+                "cpf_reserva": "11122233344",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Ficha.objects.filter(numero=701).exists())
+        self.assertEqual(Venda.objects.count(), 0)
+        self.assertEqual(
+            ReservaProduto.objects.get(cpf="11122233344").status, "pendente"
+        )
 
 
 class TestPopulateDevCommand(TestCase):
