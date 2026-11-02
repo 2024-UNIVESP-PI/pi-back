@@ -292,6 +292,107 @@ class TestQRCodeReservationFlow(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("não está disponível neste QR code", response.json()["error"])
 
+    def test_public_reservation_rejects_duplicate_product_in_request(self):
+        response = self.client.post(
+            "/movimentacao/reservas-publicas/criar/",
+            data={
+                "nome_completo": "Maria Silva",
+                "cpf": "12345678901",
+                "qr_code": "RESERVA-TESTE",
+                "produtos": [
+                    {"produto_id": self.produto_permitido.id, "quantidade": 1},
+                    {"produto_id": self.produto_permitido.id, "quantidade": 1},
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ReservaProduto.objects.count(), 0)
+
+    def test_confirm_without_ficha_returns_validation_error(self):
+        reserva = ReservaProduto.objects.create(
+            nome_completo="Maria Silva",
+            cpf="12345678901",
+            produto=self.produto_permitido,
+            quantidade=1,
+            status="pendente",
+        )
+
+        response = self.client.post(
+            f"/movimentacao/reservas/{reserva.id}/confirmar/",
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("vinculada a uma ficha", response.json()["error"])
+        reserva.refresh_from_db()
+        self.produto_permitido.refresh_from_db()
+        self.assertEqual(reserva.status, "pendente")
+        self.assertEqual(self.produto_permitido.estoque, 0)
+
+    def test_confirm_debits_ficha_and_stock(self):
+        ficha = Ficha.objects.create(numero=21, saldo=Decimal("10.00"))
+        MovimentacaoEstoque.objects.create(
+            caixa=self.caixa,
+            produto=self.produto_permitido,
+            quantidade=2,
+            tipo="E",
+        )
+        reserva = ReservaProduto.objects.create(
+            ficha=ficha,
+            nome_completo="Maria Silva",
+            cpf="12345678901",
+            produto=self.produto_permitido,
+            quantidade=1,
+            status="pendente",
+        )
+
+        response = self.client.post(
+            f"/movimentacao/reservas/{reserva.id}/confirmar/",
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        ficha.refresh_from_db()
+        self.produto_permitido.refresh_from_db()
+        reserva.refresh_from_db()
+        self.assertEqual(ficha.saldo, Decimal("4.00"))
+        self.assertEqual(self.produto_permitido.estoque, 1)
+        self.assertEqual(reserva.status, "confirmada")
+        self.assertEqual(Venda.objects.filter(ficha=ficha).count(), 1)
+
+    def test_confirm_with_insufficient_balance_keeps_reservation_and_stock(self):
+        ficha = Ficha.objects.create(numero=22, saldo=Decimal("5.00"))
+        MovimentacaoEstoque.objects.create(
+            caixa=self.caixa,
+            produto=self.produto_permitido,
+            quantidade=1,
+            tipo="E",
+        )
+        reserva = ReservaProduto.objects.create(
+            ficha=ficha,
+            nome_completo="Maria Silva",
+            cpf="12345678901",
+            produto=self.produto_permitido,
+            quantidade=1,
+            status="pendente",
+        )
+
+        response = self.client.post(
+            f"/movimentacao/reservas/{reserva.id}/confirmar/",
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        ficha.refresh_from_db()
+        self.produto_permitido.refresh_from_db()
+        reserva.refresh_from_db()
+        self.assertEqual(ficha.saldo, Decimal("5.00"))
+        self.assertEqual(self.produto_permitido.estoque, 1)
+        self.assertEqual(reserva.status, "pendente")
+        self.assertEqual(Venda.objects.count(), 0)
+
 
 class TestPopulateDevCommand(TestCase):
     def setUp(self):
