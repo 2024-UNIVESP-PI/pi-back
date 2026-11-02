@@ -1,6 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, authentication_classes, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, SAFE_METHODS
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from django.utils.crypto import constant_time_compare
@@ -399,6 +399,11 @@ class ProdutoViewSet(viewsets.ModelViewSet):
     search_fields = ['nome']
     authentication_classes = [SignedTokenAuthentication]
     permission_classes = [IsAdmin]
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsCaixaOrAdmin()]
+        return super().get_permissions()
     
     def get_queryset(self):
         """Retorna todos os produtos, incluindo os sem estoque"""

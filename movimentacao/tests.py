@@ -272,10 +272,17 @@ class TestSignedTokenAPI(TestCase):
         self.assertEqual(response.status_code, 200)
 
     @override_settings(ADMIN_USERNAME="admin", ADMIN_PASSWORD="secret")
-    def test_admin_only_endpoint_rejects_caixa_token(self):
+    def test_caixa_can_list_products_but_cannot_modify_them(self):
         token = self.login("caixa-auth", "123")
         response = self.client.get(
             "/movimentacao/produtos/", HTTP_AUTHORIZATION=f"Bearer {token}"
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            "/movimentacao/produtos/",
+            {"nome": "Bloqueado", "preco": "1.00"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
         )
         self.assertEqual(response.status_code, 403)
 
