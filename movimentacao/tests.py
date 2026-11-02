@@ -389,6 +389,49 @@ class TestQRCodeReservationFlow(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(ReservaProduto.objects.count(), 0)
 
+    def test_public_reservation_lookup_requires_creation_token(self):
+        response = self.client.post(
+            "/movimentacao/reservas-publicas/criar/",
+            data={
+                "nome_completo": "Maria Silva",
+                "cpf": "12345678901",
+                "qr_code": "RESERVA-TESTE",
+                "produtos": [{"produto_id": self.produto_permitido.id, "quantidade": 1}],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        consulta_token = response.json()["consulta_token"]
+
+        without_token = self.client.get(
+            "/movimentacao/reservas-publicas/por-cpf/?cpf=12345678901"
+        )
+        self.assertEqual(without_token.status_code, 401)
+
+        lookup = self.client.get(
+            "/movimentacao/reservas-publicas/por-cpf/",
+            {"cpf": "12345678901", "consulta_token": consulta_token},
+        )
+        self.assertEqual(lookup.status_code, 200)
+        self.assertEqual(len(lookup.json()["reservas"]), 1)
+
+    def test_public_reservation_lookup_rejects_token_for_another_cpf(self):
+        token_response = self.client.post(
+            "/movimentacao/reservas-publicas/criar/",
+            data={
+                "nome_completo": "Maria Silva",
+                "cpf": "12345678901",
+                "produtos": [{"produto_id": self.produto_permitido.id, "quantidade": 1}],
+            },
+            content_type="application/json",
+        )
+        token = token_response.json()["consulta_token"]
+        response = self.client.get(
+            "/movimentacao/reservas-publicas/por-cpf/",
+            {"cpf": "98765432100", "consulta_token": token},
+        )
+        self.assertEqual(response.status_code, 401)
+
     def test_confirm_without_ficha_returns_validation_error(self):
         reserva = ReservaProduto.objects.create(
             nome_completo="Maria Silva",
